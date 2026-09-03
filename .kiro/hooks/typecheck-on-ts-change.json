@@ -2,14 +2,14 @@
   "version": "v1",
   "hooks": [
     {
-      "name": "Typecheck on TS change",
+      "name": "Verify on TS change",
       "trigger": "PostFileSave",
-      "description": "After a .ts/.tsx file is created or saved by the agent, run the TypeScript compiler in no-emit mode so type errors surface immediately.",
+      "description": "After a .ts/.tsx file is created or saved, run the same `npm run verify` (typecheck + lint + footgun scan) that the git pre-commit hook and CI run, so quality issues surface immediately while editing. This is a Kiro-only convenience layer; the universal enforcement is the committed githooks/pre-commit gate. Logic lives in package.json, not here, so the two never diverge.",
       "matcher": "\\.(ts|tsx)$",
       "action": {
         "type": "command",
-        "command": "npx tsc --noEmit",
-        "timeout": 120
+        "command": "npm run verify",
+        "timeout": 180
       }
     }
   ]

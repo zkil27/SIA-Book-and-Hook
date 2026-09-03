@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# Universal pre-commit gate for Hook & Box.
+#
+# Runs the same `npm run verify` (typecheck + lint + footgun scan) that any tool
+# or CI runs, so a commit can't introduce a type error, lint failure, or a known
+# project footgun (stray PrismaClient, float money, catalog hard-delete, ledger
+# mutation). This is committed to the repo and activated via `core.hooksPath`
+# (see `npm run setup:hooks` / postinstall) — no husky, works on any OS.
+#
+# Bypass in a genuine emergency with:  git commit --no-verify
+# (Prefer fixing the issue; a bypassed commit still fails in CI.)
+
+echo "[pre-commit] running npm run verify ..."
+
+npm run verify
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo ""
+  echo "[pre-commit] verify failed (exit $status). Commit aborted."
+  echo "[pre-commit] Fix the issues above, or bypass with 'git commit --no-verify' (not recommended)."
+  exit 1
+fi
+
+echo "[pre-commit] verify passed."
+exit 0

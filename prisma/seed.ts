@@ -153,11 +153,14 @@ const CATALOG: CategorySeed[] = [
 
 async function clearData() {
   // Order matters: children before parents.
-  await prisma.stockMovement.deleteMany();
+  // These are intentional full-table resets: the seed rebuilds the demo DB from
+  // scratch. The append-only-ledger and soft-delete rules apply to APP code, not
+  // to a seed reset, so each destructive line is explicitly opted out below.
+  await prisma.stockMovement.deleteMany(); // footgun-ok: seed reset, not app code
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
-  await prisma.productVariant.deleteMany();
-  await prisma.product.deleteMany();
+  await prisma.productVariant.deleteMany(); // footgun-ok: seed reset, not app code
+  await prisma.product.deleteMany(); // footgun-ok: seed reset, not app code
   await prisma.category.deleteMany();
 }
 

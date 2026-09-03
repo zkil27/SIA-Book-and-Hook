@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Legacy Vite prototype — excluded from tsconfig too; not shipped code.
+    "prototype_src/**",
+    // Figma-exported asset modules (generated, not hand-authored).
+    "imports/**",
+    "public/imports/**",
   ]),
 ]);
 

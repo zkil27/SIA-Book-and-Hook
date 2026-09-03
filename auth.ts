@@ -47,7 +47,8 @@ export const { auth, signIn, signOut, handlers: { GET, POST } } = NextAuth({
         });
         
         if (dbUser) {
-          (session.user as any).role = dbUser.role;
+          (session.user as typeof session.user & { role: typeof dbUser.role }).role =
+            dbUser.role;
         }
       }
       return session;
