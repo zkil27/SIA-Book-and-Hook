@@ -7,6 +7,53 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-09-03 — Add universal code-quality verification gate (verify + footgun scan + pre-commit)
+
+**What:** Added a tool-agnostic enforcement layer so the project's written
+non-negotiables are checked mechanically, not just documented.
+- `scripts/check-footguns.ts` — pure-Node static scanner (no deps, no DB). Flags:
+  stray `new PrismaClient()` outside `lib/prisma.ts`; float/`parseFloat` money
+  math; hard-delete of `product`/`productVariant`; any edit/delete of a
+  `StockMovement` row. Exits non-zero on a hit; inline `// footgun-ok: <reason>`
+  opts a line out.
+- `package.json` scripts: `typecheck` (`tsc --noEmit`), `footguns`, and
+  `verify` = `typecheck && lint && footguns`. Also `setup:hooks` and a
+  `postinstall` step that self-activates the git hook.
+- `githooks/pre-commit` (committed, POSIX sh) runs `npm run verify`; activated
+  via `git config core.hooksPath githooks` through `scripts/setup-hooks.mjs`
+  (guarded so it never fails an install outside a git repo). No husky.
+- `.gitattributes` forces LF on `githooks/*` and `*.sh` so the hook doesn't
+  break on Linux/CI with a CRLF interpreter error.
+- Aligned the existing Kiro `PostFileSave` hook to run `npm run verify` (was
+  bare `tsc --noEmit`), so the editor convenience layer reuses the same logic.
+- Updated `AGENTS.md` with a "Verification gate" section and command list.
+
+**Fixes made to reach a green gate (pre-existing issues the gate surfaced):**
+- `eslint.config.mjs` now ignores `prototype_src/**`, `imports/**`,
+  `public/imports/**` (legacy prototype + generated Figma assets; already out of
+  tsconfig scope).
+- `app/StoreApp.tsx`: added missing React `key` props (STEP_ICONS, STATUS_ICONS,
+  order-details tuples), removed a duplicate unused `stockColor`, dropped an
+  unused `idx` param, escaped an apostrophe.
+- `auth.ts`: replaced an `as any` cast on `session.user.role` with a precise
+  inline type (no behavior change).
+- `prisma/seed.ts`: annotated the intentional wipe-and-reseed deletes with
+  `// footgun-ok: seed reset` (option 2 — explicit exceptions over blanket
+  exemption).
+
+**Why:** Team asked whether skills/AGENTS.md could make the code better, and to
+keep it universal rather than Kiro-only. Mechanical enforcement (a gate every
+tool and teammate runs) improves code quality more than additional instruction
+prose, and it turns the existing money/ledger/soft-delete/Prisma-singleton rules
+into checks that actually block violations.
+
+**Impact:** Run `npm run verify` before committing; it also runs automatically on
+commit via the pre-commit hook (bypass with `git commit --no-verify`, discouraged
+— CI still runs it). New rules go in `scripts/check-footguns.ts`. `npm run verify`
+is currently green: typecheck clean, lint 0 errors (4 non-blocking `<img>`
+warnings remain), footguns clean. No dependencies added; scope unchanged (no test
+framework).
+
 ## 2026-09-03 — Add standalone dev verification scripts (smoke / ledger / data / stress)
 
 **What:** Added a `scripts/` folder of hand-run operational checks (run via

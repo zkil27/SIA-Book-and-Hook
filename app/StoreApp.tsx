@@ -544,9 +544,6 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
     { key: "orders" as const, icon: <IcDoc size={15} />, label: "Orders" },
   ];
 
-  const stockColor = (s: string) =>
-    s === "In Stock" ? "text-emerald-600" : s === "Low Stock" ? "text-amber-500" : "text-red-500";
-
   return (
     <div className="flex flex-col md:flex-row h-full bg-[#DFF3F5]">
       {/* Mobile tab strip */}
@@ -838,7 +835,12 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
   const total = subtotal + deliveryFee;
 
   const STEP_LABELS = ["Order Review", "Delivery Info", "Payment", "Confirmation"];
-  const STEP_ICONS = [<IcDoc size={16}/>, <IcTruck size={16}/>, <IcCard size={16}/>, <IcCheckCircle size={16}/>];
+  const STEP_ICONS = [
+    <IcDoc key="review" size={16} />,
+    <IcTruck key="delivery" size={16} />,
+    <IcCard key="payment" size={16} />,
+    <IcCheckCircle key="confirmation" size={16} />,
+  ];
 
   return (
     <div className="h-full bg-[#DFF3F5] overflow-y-auto">
@@ -1067,12 +1069,12 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
                 <Label>Order Details</Label>
                 <div className="flex flex-col gap-2 mt-3 text-sm">
                   {[
-                    ["Order ID", <span className="font-mono font-bold text-[#3899AE]">#HB-005</span>],
+                    ["Order ID", <span key="v" className="font-mono font-bold text-[#3899AE]">#HB-005</span>],
                     ["Payment", method || "COD"],
-                    ["Courier", <Tag label="Lalamove" />],
-                    ["Status", <Tag label="Pending Confirmation" />],
+                    ["Courier", <Tag key="v" label="Lalamove" />],
+                    ["Status", <Tag key="v" label="Pending Confirmation" />],
                     ["Est. Delivery", "Tomorrow, 6–8 AM"],
-                    ["Total Paid", <span className="font-['Russo_One'] text-[#3899AE]">₱{total}</span>],
+                    ["Total Paid", <span key="v" className="font-['Russo_One'] text-[#3899AE]">₱{total}</span>],
                   ].map(([k, v], i) => (
                     <div key={i} className="flex justify-between items-center py-1.5 border-b border-[#DFF3F5] last:border-0">
                       <span className="text-[#7AACB8]">{k}</span>
@@ -1137,7 +1139,12 @@ function TrackOrderView({ onBack }: { onBack: () => void }) {
 
   const stepIndex = result && result !== "not-found" ? STATUS_STEPS.indexOf(result.status) : -1;
 
-  const STATUS_ICONS = [<IcClock size={17}/>, <IcCheckCircle size={17}/>, <IcTruck size={17}/>, <IcBox size={17}/>];
+  const STATUS_ICONS = [
+    <IcClock key="pending" size={17} />,
+    <IcCheckCircle key="confirmed" size={17} />,
+    <IcTruck key="ready" size={17} />,
+    <IcBox key="completed" size={17} />,
+  ];
 
   return (
     <div className="h-full bg-[#DFF3F5] overflow-y-auto">
@@ -1332,7 +1339,7 @@ function AboutView({ onBack }: { onBack: () => void }) {
           </div>
           <Divider />
           <div className="flex gap-3 overflow-x-auto pb-2">
-            {TEAM.map((member, idx) => (
+            {TEAM.map((member) => (
               <div key={member.name} className="flex flex-col items-center gap-2.5 min-w-[90px] flex-1 group">
                 <div className={`w-16 h-16 bg-gradient-to-br ${member.grad} rounded-2xl flex items-center justify-center text-white font-['Russo_One'] text-xl shadow-lg ring-2 ring-white ring-offset-2 group-hover:scale-110 group-hover:shadow-xl transition-all duration-200`}>
                   {member.initial}
@@ -1379,7 +1386,7 @@ function ContactView({ onBack }: { onBack: () => void }) {
             <IcPhone size={14} className="text-[#9CEFE3]" />
             <span className="text-[#9CEFE3] text-xs font-bold uppercase tracking-widest">Get in Touch</span>
           </div>
-          <h2 className="font-['Russo_One'] text-3xl text-white mb-1">We'd Love to Hear<br />From You</h2>
+          <h2 className="font-['Russo_One'] text-3xl text-white mb-1">We&rsquo;d Love to Hear<br />From You</h2>
           <p className="text-[#DFF3F5]/80 text-sm max-w-sm mx-auto mt-2">Have a question, a special order, or just want to say hi? Reach out to us through any of the channels below.</p>
         </div>
         <div className="h-8 relative">

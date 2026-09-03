@@ -128,9 +128,38 @@ Set both locally (`.env.local`) and in Vercel for all environments.
 
 - Dev server: `npm run dev` (long-running — don't launch it in a blocking shell
   call; ask the user to run it).
-- Lint: `npm run lint`. Typecheck: `npx tsc --noEmit`.
+- Lint: `npm run lint`. Typecheck: `npm run typecheck` (`tsc --noEmit`).
 - Prisma: `npx prisma migrate dev --name <slug>`, `npx prisma generate`,
   `npx prisma db seed`.
+- **Verify (run before every commit): `npm run verify`** — typecheck + lint +
+  footgun scan. See "Verification gate" below.
+- DB verification (read-only, run after seeding): `npm run smoke`,
+  `npm run check:ledger`, `npm run check:data`, `npm run check:all`; load probe:
+  `npm run stress -- <total> <concurrency>`.
+
+## Verification gate (tool-agnostic — applies to every tool and teammate)
+
+`npm run verify` runs `typecheck && lint && footguns` and must pass before a
+commit. It is enforced universally — not tied to any one editor:
+
+- **`npm run footguns`** (`scripts/check-footguns.ts`) statically scans source
+  for the non-negotiables that written rules alone can't enforce: a stray
+  `new PrismaClient()` outside `lib/prisma.ts`, float/`parseFloat` money math,
+  hard-deletes of products/variants, and any edit/delete of a `StockMovement`
+  row. It exits non-zero on a hit. A genuine exception (e.g. the seed's
+  wipe-and-reseed) is opted out inline with a `// footgun-ok: <reason>` comment
+  on the line — exceptions must be explicit and visible, never silently zoned.
+- **Git pre-commit hook** (`githooks/pre-commit`, activated via
+  `core.hooksPath`) runs `npm run verify` on every commit. It self-activates
+  after `npm install` (`postinstall` → `scripts/setup-hooks.mjs`); run
+  `npm run setup:hooks` manually if needed. Emergency bypass:
+  `git commit --no-verify` (discouraged — CI still runs verify).
+- **Kiro** users also get a `PostFileSave` hook that runs the same
+  `npm run verify` on `.ts`/`.tsx` saves. It is a convenience layer only; the
+  logic lives in `package.json` so Kiro and the universal gate never diverge.
+
+Adding a new project-wide "never do this" rule? Encode it as a rule in
+`scripts/check-footguns.ts` so it's enforced, not just documented.
 
 ## Known issues / current gaps (roughly end of Week 1)
 
