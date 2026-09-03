@@ -7,6 +7,25 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-09-03 — Reconcile dev with master (merge) and restore Git LFS rules in .gitattributes
+
+**What:** Merged `origin/master` back into `dev` so the branches reconverge
+(dev was 4 commits behind master), resolving an append-only conflict in
+`docs/changelog.md` (all entries kept, newest-first). Also reconciled
+`.gitattributes`: dev's copy had only the two git-hooks LF rules and was missing
+master's ~130 lines of Git LFS tracking rules. The file now contains master's
+full LFS ruleset **plus** the `githooks/* text eol=lf` and `*.sh text eol=lf`
+lines, so neither side's config is lost when dev merges to master.
+
+**Why:** After merging master into dev, dev's shorter `.gitattributes` would
+have won and dropped the LFS rules on the next dev→master PR. LFS is actively in
+use (the `imports/` and `public/imports/` Figma PNGs plus `.figma/attachments`
+are LFS-tracked), so losing those rules would break binary-asset handling.
+
+**Impact:** No application code, schema, or dependency changes. `.gitattributes`
+now carries both concerns. `dev` is a clean superset of `master`; PR #3
+(dev → master) should merge without conflict once `origin/dev` is updated.
+
 ## 2026-09-03 — Add universal code-quality verification gate (verify + footgun scan + pre-commit)
 
 **What:** Added a tool-agnostic enforcement layer so the project's written
