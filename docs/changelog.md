@@ -7,6 +7,31 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-09-03 — Install universal agent skills (frontend-design + hookandbox-stack)
+
+**What:** Installed two workspace-scoped Agent Skills, each placed in all five
+agent skill directories so they work across every AI tool the repo supports
+(`.agents/`, `.claude/`, `.cursor/`, `.devin/`, and a newly created `.kiro/`):
+- `frontend-design` — the official Anthropic skill (Apache 2.0; `SKILL.md` +
+  `LICENSE.txt`) for distinctive, intentional UI that avoids generic "AI slop".
+  Fetched verbatim from `github.com/anthropics/skills`.
+- `hookandbox-stack` — a project-tailored skill authored from this repo's own
+  files (`prisma/schema.prisma`, `lib/prisma.ts`, `auth.ts`, `auth.config.ts`,
+  `.env.example`, `package.json`) and steering docs. Encodes the money-as-centavos,
+  append-only StockMovement ledger, soft-delete, Prisma singleton, Next.js 16
+  App Router, NextAuth v5 role-gating, and Supabase dual-connection-string rules.
+
+**Why:** The team wanted installable skills that fit the stack and goal, plus a
+UI/UX design skill — usable by any agent, not just Kiro, and scoped to this
+project only.
+
+**Impact:** New `.kiro/skills/` directory added. No application code, schema,
+or dependencies changed — these are agent-guidance files. Skills auto-activate
+by description/trigger when relevant work comes up. The `frontend-design` skill
+carries its upstream Apache 2.0 `LICENSE.txt`; keep it alongside the `SKILL.md`.
+Note: the pre-existing `prisma-composer` skill folders remain unused leftovers
+(this project uses standard Prisma, not `@prisma/composer`).
+
 ## 2026-09-03 — Add hard rule requiring all changes to be documented
 
 **What:** Added a "MANDATORY: document every change" section near the top of
