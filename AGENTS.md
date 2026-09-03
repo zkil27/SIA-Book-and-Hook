@@ -18,6 +18,45 @@ Claude, Codex, Windsurf, etc.). This file is the single source of truth; the
 tool-specific files (`CLAUDE.md`, `.cursor/rules/`, Kiro's `.kiro/steering/`)
 point back here so the context stays consistent across tools.
 
+## MANDATORY: document every change (hard rule — no exceptions)
+
+**Every change an AI agent makes to this repository MUST be documented in
+`docs/`. No edit ships undocumented. This is not optional.**
+
+This rule applies to any change to code, configuration, schema, dependencies,
+scripts, or project structure — anything other than editing documentation
+itself. A change is not "done" until its documentation entry exists in the same
+turn (and, when committing, the same commit) as the change.
+
+### How to comply
+
+1. **Maintain a changelog.** Append an entry to `docs/changelog.md` for every
+   change. If the file does not exist yet, create it. Each entry records:
+   - **Date** (use the current date) and a one-line summary.
+   - **What changed** — the files touched and what was done.
+   - **Why** — the reason or the request behind it.
+   - **Impact** — anything a teammate or the panel should know (new commands,
+     migrations, behavior changes, follow-ups).
+2. **Update the affected topic doc too.** If the change touches an area that
+   already has a doc, update that doc in the same turn so it never drifts:
+   - Data model / schema change → `docs/data-model.md` **and** regenerate the
+     ERD in `docs/diagrams/` (per the data-model rules).
+   - Scope / feature boundary change → `docs/scope.md` (respect the freeze;
+     record it in the change log there).
+   - Deployment / env / build change → `docs/deployment.md`.
+   - New or changed user-facing behavior → `docs/project-overview.md`.
+   - Anything with no home doc → still gets a `docs/changelog.md` entry.
+3. **State the doc update in your summary.** When you report a change to the
+   user, name the doc file(s) you updated. If you did not update docs, you did
+   not finish the task.
+
+### The rule in one line
+
+> If code changed and `docs/` did not, the task is incomplete.
+
+If a doc and the code ever disagree, the code and `prisma/schema.prisma` win —
+then fix the doc immediately.
+
 ## Product
 
 Academic capstone (course code "SIA") for a **fictional** fresh-seafood retailer
@@ -71,6 +110,9 @@ only), no automated test suite (manual verification only).
   `new PrismaClient()` causes "Too many connections".
 - Prices/stock live on `ProductVariant`, not `Product`. `Order.totalCentavos`
   and `OrderItem.priceAtTime` are stored (not recalculated) so history is stable.
+- **Every change is documented in `docs/`** — see "MANDATORY: document every
+  change" above. Append to `docs/changelog.md` and update any affected topic doc
+  in the same turn. An undocumented change is an unfinished change.
 
 ## Prisma / Supabase (biggest time sink)
 
