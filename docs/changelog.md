@@ -7,6 +7,25 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-09-03 — Add GitHub Actions CI running the verify gate on push/PR
+
+**What:** Added `.github/workflows/verify.yml` (the repo's first CI workflow). It
+runs `npm run verify` (typecheck + lint + footgun scan) on Node 20 for every
+push and pull request to `dev` and `master`. Uses `npm ci` with npm caching,
+skips Git LFS on checkout (`lfs: false`), and cancels superseded runs on the same
+ref. Added a "Continuous integration" section to `docs/deployment.md`.
+
+**Why:** `AGENTS.md` already promised "CI still runs verify" as the backstop
+behind the bypassable pre-commit hook, but no CI existed. This makes the
+verification gate unbypassable on the shared branches.
+
+**Impact:** No application code, schema, or dependency changes. Deliberately
+excludes the DB-backed scripts (`smoke`/`check:ledger`/`check:data`/`stress`)
+and `next build` — those need Supabase secrets, which is out of scope; Vercel
+still owns deployment. The existing 4 `<img>` ESLint warnings stay non-blocking
+(eslint exits 0). Optional follow-up: mark the "verify" check as required in
+branch protection for `master`.
+
 ## 2026-09-03 — Reconcile dev with master (merge) and restore Git LFS rules in .gitattributes
 
 **What:** Merged `origin/master` back into `dev` so the branches reconverge

@@ -1,0 +1,50 @@
+name: Verify
+
+# Runs the project's verification gate (typecheck + lint + footgun scan) on
+# every push and pull request targeting the long-lived branches. This is the
+# CI half of the gate described in AGENTS.md: the local pre-commit hook can be
+# bypassed with `git commit --no-verify`, but this workflow cannot, so no
+# footgun (stray PrismaClient, float money math, hard-deletes, ledger edits)
+# reaches dev/master unnoticed.
+#
+# Intentionally does NOT run the DB-backed checks (smoke/check:ledger/etc.) or
+# `next build`: those need real Supabase connection strings, and wiring secrets
+# into CI is out of the current scope. Deployment stays with Vercel.
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+    branches: [dev, master]
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: typecheck + lint + footguns
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The verify gate reads only source; skip pulling LFS binaries
+          # (Figma PNGs) to keep runs fast and avoid LFS bandwidth.
+          lfs: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `npm ci` triggers `postinstall`, which runs `prisma generate` and the
+      # git-hook setup. `prisma generate` needs no database connection, and the
+      # hook setup is guarded to no-op outside a normal git checkout.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run verification gate
+        run: npm run verify
