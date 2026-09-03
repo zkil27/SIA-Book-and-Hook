@@ -7,6 +7,54 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-09-03 — Replace admin inventory Low/Out toggle with real filters
+
+**What:** Reworked the admin Inventory filter bar in `app/StoreApp.tsx`. The
+single "Low / Out" boolean toggle is gone. In its place:
+- A **category** dropdown (built from the distinct categories present in the
+  inventory data, sorted, with an "All categories" default).
+- A **stock-status** segmented control (All / In stock / Low / Out) whose dots
+  reuse the same emerald/amber/red semantics as the table's status column, so
+  the control visually mirrors the data it filters.
+- A live "Showing X of Y" count, and a "Clear filters" link that appears only
+  when a search term, category, or status filter is active.
+
+Search, category, and status now compose (all three apply together). The
+empty-state row copy was updated to point the user at clearing filters.
+
+**Why:** Follow-up request — the previous filter (low/out only) was too narrow
+to be useful for an admin scanning ~50 products across several categories.
+
+**Impact:** Client-side only; no DB, schema, or dependency changes. Reuses the
+brand palette and existing `FieldInput` primitive; adds a native `<select>` and
+a segmented control (no new dependencies). `npx tsc --noEmit` passes; ESLint
+reports only pre-existing issues unrelated to these edits. Replaces the
+`lowStockOnly` state added in the prior entry with `invCategory` + `invStatus`.
+
+## 2026-09-03 — Wire up storefront and admin product search + filter
+
+**What:** Made the previously decorative search boxes and Filter button
+functional in `app/StoreApp.tsx` (the prototype UI):
+- **Storefront (`ClientView`)** — added a `search` state, bound the header
+  search field's `value`/`onChange`, and combined it with the existing category
+  filter so the product grid now filters by name or category substring (case-
+  insensitive). The empty-state message now reflects a no-match search vs. an
+  empty category.
+- **Admin inventory (`AdminView`)** — added `invSearch` and `lowStockOnly`
+  state, bound the "Search products…" field, and turned the inert "Filter"
+  button into a toggle that limits the table to Low / Out-of-stock items. The
+  inventory table renders the derived `filteredInventory` list and shows an
+  empty-state row when nothing matches.
+
+**Why:** User asked to "make the filter and search work" — both inputs rendered
+but were `readOnly` with no state wired, and the admin Filter button did nothing.
+
+**Impact:** Client-side only, still operating on the props-supplied product data
+(no DB, schema, or dependency changes). `npx tsc --noEmit` passes; `npm run lint`
+shows only pre-existing warnings/errors unrelated to these edits. No new
+commands or migrations. Behavior is additive — existing category filtering is
+unchanged.
+
 ## 2026-09-03 — Install universal agent skills (frontend-design + hookandbox-stack)
 
 **What:** Installed two workspace-scoped Agent Skills, each placed in all five
