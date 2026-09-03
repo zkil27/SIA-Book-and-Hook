@@ -1,0 +1,10 @@
+{
+  "description": "Streamline seafood ordering with a user-friendly online platform for customers in Dasmarinas, featuring inventory management and secure payment options.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
