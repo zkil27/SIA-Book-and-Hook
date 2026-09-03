@@ -7,6 +7,7 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+<<<<<<< HEAD
 ## 2026-09-03 — Replace boilerplate README with project README
 
 **What:** Rewrote `README.md`, which was still the stock `create-next-app`
@@ -23,6 +24,8 @@ teammates and the panel get oriented and run the app correctly.
 Commands and env-var guidance mirror `package.json`, `.env.example`, and the
 steering docs.
 
+=======
+>>>>>>> 7db30a822b5867d2e684fdabf599b861f20e3a29
 ## 2026-09-03 — Install universal agent skills (frontend-design + hookandbox-stack)
 
 **What:** Installed two workspace-scoped Agent Skills, each placed in all five

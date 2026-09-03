@@ -39,7 +39,8 @@ delivery radius. Has a Facebook page used for orders and price announcements.
 
 **Users of the system:**
 - **Customer** — browses the catalog, views product detail with real-time stock
-  and price-per-variant, sees their own order history.
+  and price-per-variant, builds a cart, checks out (selecting a payment method),
+  tracks an order by ID, and sees their own order history.
 - **Admin / staff** — manages products and variants, adjusts stock with reasons,
   reviews orders and the stock movement ledger, sees a basic dashboard summary.
 
@@ -57,6 +58,10 @@ delivery radius. Has a Facebook page used for orders and price announcements.
 | Search | Text match on product name. Basic. Not fuzzy, not ranked. |
 | Customer auth | Register and log in with credentials; session persists. |
 | Customer order history | Logged-in customer can view their own past orders and statuses. |
+| Shopping cart | Client-side cart: add/remove items, adjust quantity, running subtotal, and a delivery-fee rule (free over ₱500). Cart state lives in the browser. |
+| Checkout flow | Multi-step checkout — order review, delivery information, payment method selection, confirmation. Produces an order record with status `PENDING`. |
+| Payment method selection | Customer picks GCash or Cash on Delivery. UI only — displays GCash details / QR placeholder and a proof-of-payment upload placeholder. No real capture, no integration. |
+| Order tracking | Customer enters an Order ID and sees its status against a fixed set of stages (Pending → Confirmed → Ready/Out for Delivery → Completed/Delivered). |
 
 ### Admin panel `(admin)`
 
@@ -91,21 +96,25 @@ September 5, and most of it never gets built at all.**
 **Never in this project:**
 - Real payment processing. No card capture, no GCash/Maya/Stripe/PayPal
   integration, no stored payment credentials. Orders end at a record with status
-  `PENDING` — payment is handled outside the system.
-- Real shipping, courier APIs, or delivery tracking.
+  `PENDING` — payment is handled outside the system. The checkout collects a
+  chosen payment method (GCash / COD) and shows static payment instructions, but
+  captures and settles nothing.
+- Real shipping or courier APIs — no Lalamove/courier integration and no live
+  GPS delivery tracking. The order tracker shows internal order status only;
+  couriers referenced in the UI (e.g. Lalamove) are labels, not integrations.
 - Email or SMS sending of any kind — no order confirmations, no password reset
   emails, no notifications.
 - Multi-vendor or marketplace functionality. One client, one catalog.
 - Any handling of real customer personal data. All data is seeded and fictional.
 
 **Not before September 5** (revisit only after the vertical slice is done):
-- Shopping cart & checkout flow. Cart is client-side state until told otherwise.
-  There is no checkout that creates an order from the storefront in this phase.
 - Product reviews and ratings.
 - Recommendations, "related products", or anything resembling a recommender.
-- Discount codes, promotions, or dynamic pricing.
-- Analytics dashboards, sales charts, revenue reporting (beyond the simple
-  dashboard summary).
+- Discount codes, promotions, or dynamic pricing. (The only pricing rule in
+  scope is the flat free-delivery-over-₱500 threshold shown at checkout.)
+- Advanced analytics and revenue reporting. The dashboard may show summary
+  counts and simple at-a-glance charts (weekly sales, top sellers), but nothing
+  with export, drill-down, or a charting/reporting library.
 - Image upload. Seeded products use static or placeholder image URLs.
 - Wishlists, saved items, or user profile pages beyond basic account info.
 - Mobile app, PWA features, offline support.
@@ -116,7 +125,10 @@ September 5, and most of it never gets built at all.**
 - Search is a name match, not full-text search.
 - Auth is credentials only — no OAuth, no magic links, no 2FA.
 - Accessibility follows whatever shadcn/ui provides by default; no audit.
-- The dashboard is counts and alerts only — no chart libraries or export features.
+- The dashboard is counts, alerts, and simple hand-built bar/progress charts —
+  no charting library, no export features.
+- The cart and checkout are a client-side flow. There is no server-side cart
+  persistence, and payment is method-selection plus static instructions only.
 
 ---
 
@@ -138,12 +150,15 @@ business performance. This project delivers a web-based e-commerce platform with
 two interfaces: a public-facing product catalog where customers can browse
 available seafood by category and view real-time stock and pricing, and a
 role-protected admin panel where staff can manage products, process orders, and
-track stock movements through an append-only ledger. The system is built with
-Next.js (App Router), TypeScript, Prisma ORM over PostgreSQL (Supabase), and
-Tailwind CSS with shadcn/ui components, deployed on Vercel. The initial
-deliverable focuses on catalog browsing, admin CRUD, order management, and stock
-tracking — explicitly excluding payment processing, cart/checkout flows,
-notifications, and analytics beyond a basic dashboard summary.
+track stock movements through an append-only ledger. Customers can build a
+client-side cart and move through a multi-step checkout that records an order and
+a chosen payment method, with an order tracker that reports internal order
+status. The system is built with Next.js (App Router), TypeScript, Prisma ORM
+over PostgreSQL (Supabase), and Tailwind CSS with shadcn/ui components, deployed
+on Vercel. The deliverable focuses on catalog browsing, cart and checkout, order
+and stock management, and admin CRUD — explicitly excluding real payment
+processing and settlement, courier/delivery integrations, notifications, and
+analytics beyond a basic dashboard summary.
 
 ---
 
@@ -152,3 +167,4 @@ notifications, and analytics beyond a basic dashboard summary.
 | Date | Change | Agreed by |
 |---|---|---|
 | 2026-08-22 | Scope frozen — Hook and Box (fresh seafood) | Lead |
+| 2026-09-03 | Aligned scope with the built prototype: moved shopping cart, multi-step checkout, GCash/COD payment-method selection (UI only), and order-status tracking into scope. Real payment settlement and courier integrations remain out of scope. | Lead |

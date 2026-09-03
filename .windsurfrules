@@ -1,0 +1,11 @@
+# Windsurf project rules
+
+The authoritative, cross-tool project context lives in `AGENTS.md` at the repo
+root. Read it before doing any work — it covers the product, frozen scope
+boundaries, tech stack (Next.js 16 / React 19 / Prisma / Supabase / NextAuth v5),
+non-negotiable rules (money as Int centavos, append-only stock ledger,
+soft-delete, single Prisma client via lib/prisma.ts), the two Supabase
+connection strings, commands, and current gaps.
+
+Ignore the `@prisma/composer` SKILL.md files — this project uses standard
+Prisma, not Prisma Composer.

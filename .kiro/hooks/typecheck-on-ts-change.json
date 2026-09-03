@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Typecheck on TS change",
+      "trigger": "PostFileSave",
+      "description": "After a .ts/.tsx file is created or saved by the agent, run the TypeScript compiler in no-emit mode so type errors surface immediately.",
+      "matcher": "\\.(ts|tsx)$",
+      "action": {
+        "type": "command",
+        "command": "npx tsc --noEmit",
+        "timeout": 120
+      }
+    }
+  ]
+}
