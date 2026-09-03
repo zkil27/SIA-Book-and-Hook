@@ -7,6 +7,43 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-09-03 — Add standalone dev verification scripts (smoke / ledger / data / stress)
+
+**What:** Added a `scripts/` folder of hand-run operational checks (run via
+`tsx`, no new dependencies) plus `npm` shortcuts. These are NOT an automated
+test suite — the scope (`docs/scope.md`) excludes one — but standalone dev tools
+in the same category as `prisma/seed.ts`. Files:
+- `scripts/_report.ts` — shared `Report` helper (pass/fail/warn tally, peso
+  formatter, non-zero exit on failure). Documents why these scripts use their
+  own `PrismaClient` rather than the `server-only` `@/lib/prisma` singleton.
+- `scripts/smoke.ts` — DB reachability, per-model row counts, and seed-health
+  signals (warns when the DB looks empty / under-seeded vs the ~50-product target).
+- `scripts/check-ledger.ts` — StockMovement invariants: no negative computed
+  stock, no zero-quantity or reason-less movements, no orphaned rows. Also prints
+  a movements-by-reason breakdown and on-hand inventory value.
+- `scripts/check-data.ts` — money is non-negative integer centavos, stored
+  `Order.totalCentavos` matches the sum of its items, `priceAtTime` is captured,
+  active products have a variant, SKUs are non-empty, users have a hash/role and
+  at least one ADMIN exists.
+- `scripts/stress-connections.ts` — concurrent read-query load generator through
+  one client; reports p50/p95/max latency and flags "Too many connections" /
+  pool-exhaustion errors (the Supabase free-tier gotcha). Args: `[total] [conc]`.
+
+`package.json` scripts added: `smoke`, `check:ledger`, `check:data`, `check:all`,
+`stress`.
+
+**Why:** Team asked for useful test-like scripts (smoke/stress/etc.) for
+development. Framed as operational verification rather than a graded test suite
+so it respects the frozen "manual verification only" scope while still guarding
+the load-bearing invariants (the stock ledger above all).
+
+**Impact:** All scripts are read-only against the DB (stress only reads) and safe
+to run anytime after seeding, e.g. `npm run check:all` or `npm run stress -- 500 50`.
+Each exits non-zero on failure, so they're usable from hooks or CI later. No app
+code, schema, or dependency changes; `tsx` was already a devDependency. `scripts/`
+is covered by `tsconfig` `**/*.ts` — `npx tsc --noEmit` passes. Scope unchanged
+(no test framework added).
+
 ## 2026-09-03 — Replace admin inventory Low/Out toggle with real filters
 
 **What:** Reworked the admin Inventory filter bar in `app/StoreApp.tsx`. The
