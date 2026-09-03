@@ -139,6 +139,22 @@ shows only pre-existing warnings/errors unrelated to these edits. No new
 commands or migrations. Behavior is additive — existing category filtering is
 unchanged.
 
+## 2026-09-03 — Replace boilerplate README with project README
+
+**What:** Rewrote `README.md`, which was still the stock `create-next-app`
+boilerplate, into a Hook & Box project README: product summary, the stock
+ledger, tech stack, getting-started (including the dual Supabase
+`DATABASE_URL`/`DIRECT_URL` setup and `.env.local`), a commands table, the
+money/stock/soft-delete/Prisma-singleton conventions, pointers to the
+authoritative `docs/`, and the installed agent skills.
+
+**Why:** The default README described none of this project; a real README helps
+teammates and the panel get oriented and run the app correctly.
+
+**Impact:** Documentation only; no code, schema, or dependencies changed.
+Commands and env-var guidance mirror `package.json`, `.env.example`, and the
+steering docs.
+
 ## 2026-09-03 — Install universal agent skills (frontend-design + hookandbox-stack)
 
 **What:** Installed two workspace-scoped Agent Skills, each placed in all five
