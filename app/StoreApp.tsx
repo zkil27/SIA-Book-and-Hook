@@ -204,11 +204,12 @@ type View = "client" | "admin" | "payment" | "track" | "about" | "contact";
 // ─── Admin Login ──────────────────────────────────────────────────────────────
 
 function AdminLogin({ onUnlock }: { onUnlock: () => void }) {
+  const [user, setUser] = useState("");
   const [pw, setPw] = useState("");
   const [error, setError] = useState(false);
 
   function attempt() {
-    if (pw === "admin123") { onUnlock(); }
+    if (user === "admin" && pw === "admin123") { onUnlock(); }
     else { setError(true); setPw(""); }
   }
 
@@ -221,6 +222,16 @@ function AdminLogin({ onUnlock }: { onUnlock: () => void }) {
         </div>
         <div className="flex flex-col gap-4">
           <div>
+            <Label sub>Username</Label>
+            <div className="mt-1">
+              <FieldInput
+                placeholder="Enter username"
+                value={user}
+                onChange={v => { setUser(v); setError(false); }}
+              />
+            </div>
+          </div>
+          <div>
             <Label sub>Password</Label>
             <div className="mt-1">
               <FieldInput
@@ -229,10 +240,10 @@ function AdminLogin({ onUnlock }: { onUnlock: () => void }) {
                 onChange={v => { setPw(v); setError(false); }}
               />
             </div>
-            {error && <p className="text-xs text-red-500 mt-1.5">Incorrect password. Please try again.</p>}
+            {error && <p className="text-xs text-red-500 mt-1.5">Incorrect username or password. Please try again.</p>}
           </div>
           <Btn label="Log In" filled full onClick={attempt} />
-          <p className="text-center text-xs text-[#7AACB8]">Demo password: <span className="font-mono font-semibold text-[#3899AE]">admin123</span></p>
+          <p className="text-center text-xs text-[#7AACB8]">Demo credentials · User: <span className="font-mono font-semibold text-[#3899AE]">admin</span> · Pass: <span className="font-mono font-semibold text-[#3899AE]">admin123</span></p>
         </div>
       </Card>
     </div>
@@ -512,6 +523,7 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
   const [invSearch, setInvSearch] = useState("");
   const [invCategory, setInvCategory] = useState("All");
   const [invStatus, setInvStatus] = useState<"All" | "In Stock" | "Low Stock" | "Out of Stock">("All");
+  const [addOpen, setAddOpen] = useState(false);
 
   function saveStock(id: string) {
     const val = parseInt(editStock);
@@ -680,7 +692,7 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
             <>
               <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
                 <h2 className="font-['Russo_One'] text-2xl text-[#1C4F5A]">Inventory</h2>
-                <Btn label="+ Add Product" filled small />
+                <Btn label="+ Add Product" filled small onClick={() => setAddOpen(true)} />
               </div>
               <div className="flex gap-3 mb-3 flex-wrap items-center">
                 <div className="flex-1 min-w-[160px]"><FieldInput placeholder="Search products…" value={invSearch} onChange={setInvSearch} /></div>
@@ -817,6 +829,170 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      {addOpen && (
+        <AddProductModal
+          categories={invCategories.filter(c => c !== "All")}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Add Product Modal ────────────────────────────────────────────────────────
+
+function AddProductModal({ categories, onClose }: { categories: string[]; onClose: () => void }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState(categories[0] ?? "Fish");
+  const [description, setDescription] = useState("");
+
+  type VariantDraft = { name: string; sku: string; price: string; stock: string };
+  const emptyVariant = (): VariantDraft => ({ name: "", sku: "", price: "", stock: "" });
+  const [variants, setVariants] = useState<VariantDraft[]>([emptyVariant()]);
+
+  function updateVariant(idx: number, patch: Partial<VariantDraft>) {
+    setVariants(vs => vs.map((v, i) => (i === idx ? { ...v, ...patch } : v)));
+  }
+  function addVariant() {
+    setVariants(vs => [...vs, emptyVariant()]);
+  }
+  function removeVariant(idx: number) {
+    setVariants(vs => (vs.length > 1 ? vs.filter((_, i) => i !== idx) : vs));
+  }
+
+  // Auto-suggest a SKU from category + product name, e.g. HB-FIS-BANGUS-500G
+  function suggestSku(variantName: string) {
+    return (
+      "HB-" +
+      (category.slice(0, 3).toUpperCase() || "GEN") +
+      "-" +
+      (name.trim().split(/\s+/)[0]?.toUpperCase().replace(/[^A-Z0-9]/g, "") || "SKU") +
+      (variantName.trim() ? "-" + variantName.trim().split(/\s+/)[0].toUpperCase().replace(/[^A-Z0-9]/g, "") : "")
+    );
+  }
+
+  const catOptions = categories.length ? categories : ["Fish", "Shellfish", "Squid & Octopus", "Crustaceans"];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1C4F5A]/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-xl max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-[#3899AE] px-6 py-4 flex items-start justify-between shrink-0">
+          <div>
+            <h3 className="font-['Russo_One'] text-lg text-white">Add New Product</h3>
+            <p className="text-xs text-white/80 mt-0.5">Fill in product details and at least one variant</p>
+          </div>
+          <button onClick={onClose} className="text-white/80 hover:text-white transition-colors mt-0.5" aria-label="Close">
+            <IcXCircle size={20} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto px-6 py-5 flex flex-col gap-6">
+          {/* Section 1 — Product info */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-5 h-5 rounded-full bg-[#3899AE] text-white text-[11px] font-bold flex items-center justify-center">1</span>
+              <Label>Product Info</Label>
+            </div>
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Product Name <span className="text-red-500">*</span></label>
+                <FieldInput placeholder="e.g. Galunggong (Round Scad)" value={name} onChange={setName} />
+              </div>
+              <div>
+                <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Category <span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <select value={category} onChange={e => setCategory(e.target.value)}
+                    className="w-full appearance-none border border-[#B8E4EC] rounded-lg pl-4 pr-9 py-2.5 text-sm text-[#1C4F5A] bg-white outline-none focus:border-[#3899AE] transition-colors cursor-pointer">
+                    {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7AACB8]">
+                    <svg width={14} height={14} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 7 5 5 5-5"/></svg>
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Description <span className="text-[#7AACB8] font-normal">(optional)</span></label>
+                <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
+                  placeholder="Short description visible to customers…"
+                  className="w-full border border-[#B8E4EC] rounded-lg px-4 py-2.5 text-sm text-[#1C4F5A] placeholder-[#7AACB8] bg-white outline-none focus:border-[#3899AE] transition-colors resize-none" />
+              </div>
+              <div>
+                <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Product Photo <span className="text-[#7AACB8] font-normal">(optional)</span></label>
+                <div className="w-full border border-dashed border-[#B8E4EC] rounded-lg py-6 flex flex-col items-center justify-center gap-1.5 text-[#7AACB8] bg-[#F5FBFC]">
+                  <IcUpload size={22} className="text-[#85CDDB]" />
+                  <span className="text-sm font-medium text-[#3899AE]">Click to upload a photo</span>
+                  <span className="text-[11px] text-[#7AACB8]">JPG, PNG, WEBP · max ~5 MB</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <Divider />
+
+          {/* Section 2 — Variants */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="w-5 h-5 rounded-full bg-[#3899AE] text-white text-[11px] font-bold flex items-center justify-center">2</span>
+              <Label>Variants</Label>
+              <span className="text-xs text-[#7AACB8]">Price &amp; stock live here, not on the product</span>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {variants.map((v, idx) => {
+                const suggestedSku = suggestSku(v.name);
+                return (
+                  <div key={idx} className="border border-[#B8E4EC] rounded-xl p-4 bg-[#F5FBFC]">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[11px] font-bold text-[#3899AE] uppercase tracking-wider">Variant {idx + 1}</p>
+                      {variants.length > 1 && (
+                        <button type="button" onClick={() => removeVariant(idx)}
+                          className="text-[11px] text-[#7AACB8] hover:text-red-500 font-medium transition-colors">Remove</button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Variant Name <span className="text-red-500">*</span></label>
+                        <FieldInput placeholder="e.g. 500g, Whole, Per Kilo" value={v.name} onChange={val => updateVariant(idx, { name: val })} />
+                      </div>
+                      <div>
+                        <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">SKU <span className="text-red-500">*</span></label>
+                        <FieldInput placeholder={suggestedSku} value={v.sku} onChange={val => updateVariant(idx, { sku: val })} />
+                        <button type="button" onClick={() => updateVariant(idx, { sku: suggestedSku })}
+                          className="text-[11px] text-[#3899AE] hover:underline font-medium mt-1">Auto-suggest SKU</button>
+                      </div>
+                      <div>
+                        <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Price (₱) <span className="text-red-500">*</span></label>
+                        <FieldInput type="number" placeholder="₱ 0.00" value={v.price} onChange={val => updateVariant(idx, { price: val })} />
+                      </div>
+                      <div>
+                        <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Initial Stock</label>
+                        <FieldInput type="number" placeholder="0 (adjust later)" value={v.stock} onChange={val => updateVariant(idx, { stock: val })} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <button type="button" onClick={addVariant}
+                className="w-full border border-dashed border-[#B8E4EC] rounded-xl py-3 text-sm font-semibold text-[#3899AE] hover:border-[#3899AE] hover:bg-[#F5FBFC] transition-colors">
+                + Add Another Variant
+              </button>
+            </div>
+          </section>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-[#B8E4EC] px-6 py-4 flex justify-end gap-3 shrink-0 bg-white">
+          <Btn label="Cancel" onClick={onClose} />
+          <Btn label="Save Product" filled onClick={onClose} />
         </div>
       </div>
     </div>

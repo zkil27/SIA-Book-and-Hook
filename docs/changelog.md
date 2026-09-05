@@ -7,6 +7,88 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-09-05 — Add Username field to admin login
+
+**What:** Added the missing **Username** textbox to `AdminLogin` in
+`app/StoreApp.tsx` (above the existing Password field), backed by a new `user`
+state. The login check now requires both `user === "admin"` and
+`pw === "admin123"`; the error message changed to "Incorrect username or
+password." This matches the login card in the provided screenshot, which showed a
+Username field the code did not yet render.
+
+**Why:** User pointed out the screenshot's admin Username textbox was absent —
+the demo hint listed "User: admin" but there was no field to enter it.
+
+**Impact:** Prototype UI only — still fake client-side auth, not the real
+NextAuth Credentials flow. No schema, dependency, or scope changes. Verified with
+`getDiagnostics` (no errors; only pre-existing Tailwind v4 class warnings).
+
+**What:** Two prototype-UI fixes in `app/StoreApp.tsx`:
+- **Admin login (`AdminLogin`):** the demo-credentials hint now shows both the
+  username and password ("Demo credentials · User: admin · Pass: admin123")
+  instead of only the password.
+- **Add New Product modal (`AddProductModal`):** replaced the single hardcoded
+  "Variant 1" block (backed by four standalone `variantName`/`sku`/`price`/
+  `stock` states) with a `variants` array of drafts. Added `addVariant`,
+  `removeVariant`, and `updateVariant` handlers, made the SKU auto-suggest a
+  per-variant `suggestSku(name)` function, and wired the "+ Add Another Variant"
+  button so it actually appends a new variant card. Each extra card past the
+  first gets a "Remove" control.
+
+**Why:** User asked to surface the admin username on the login card and reported
+that "+ Add Another Variant" did nothing — the button existed but there was no
+state to add to.
+
+**Impact:** Prototype UI only — still no persistence; Save Product continues to
+just close the modal. No schema, dependency, or scope changes. Note prices are
+still collected as plain peso strings in this mock form; the centavos-Int
+conversion belongs to the real DB-backed save path when that gets built. Verified
+with `getDiagnostics` (no errors; only pre-existing Tailwind v4 class warnings
+elsewhere in the file).
+
+**What:** Wired the previously inert `+ Add Product` button in the admin
+Inventory tab (`app/StoreApp.tsx`) to open a new `AddProductModal` component. The
+modal matches the intended design: a teal header ("Add New Product" + "Fill in
+product details and at least one variant" + close X), a numbered **1 Product
+Info** section (Product Name*, Category* select sourced from the current
+inventory's categories, optional Description textarea, optional Product Photo
+upload dropzone with "JPG, PNG, WEBP · max ~5 MB" hint), a numbered **2 Variants**
+section labelled "Price & stock live here, not on the product" containing a
+Variant 1 card (Variant Name*, SKU* with an "Auto-suggest SKU" helper that fills
+a `HB-<CAT>-<NAME>-<VARIANT>` slug, Price (₱)*, Initial Stock), and a footer with
+Cancel / Save Product. Added an `addOpen` state to toggle it.
+
+**Why:** User asked to build out the current "Add New Product" flow to match the
+provided screenshot of the modal.
+
+**Impact:** Prototype UI only — consistent with the rest of the admin view,
+nothing persists to the database yet (both Cancel and Save just close the modal).
+No schema, dependency, or scope changes. Reuses existing primitives (`Btn`,
+`FieldInput`, `Divider`, `Label`, `IcUpload`, `IcXCircle`) and the brand palette.
+`npm run typecheck` and `npm run footguns` both pass; lint shows only pre-existing
+warnings. Note: image upload is out of scope (`docs/scope.md` — placeholder URLs
+only), so the photo dropzone is presentational and does not upload; the modal's
+Save is a stub pending real product-CRUD server wiring.
+
+## 2026-09-03 — Add GitHub Actions CI running the verify gate on push/PR
+
+**What:** Added `.github/workflows/verify.yml` (the repo's first CI workflow). It
+runs `npm run verify` (typecheck + lint + footgun scan) on Node 20 for every
+push and pull request to `dev` and `master`. Uses `npm ci` with npm caching,
+skips Git LFS on checkout (`lfs: false`), and cancels superseded runs on the same
+ref. Added a "Continuous integration" section to `docs/deployment.md`.
+
+**Why:** `AGENTS.md` already promised "CI still runs verify" as the backstop
+behind the bypassable pre-commit hook, but no CI existed. This makes the
+verification gate unbypassable on the shared branches.
+
+**Impact:** No application code, schema, or dependency changes. Deliberately
+excludes the DB-backed scripts (`smoke`/`check:ledger`/`check:data`/`stress`)
+and `next build` — those need Supabase secrets, which is out of scope; Vercel
+still owns deployment. The existing 4 `<img>` ESLint warnings stay non-blocking
+(eslint exits 0). Optional follow-up: mark the "verify" check as required in
+branch protection for `master`.
+
 ## 2026-09-03 — Reconcile dev with master (merge) and restore Git LFS rules in .gitattributes
 
 **What:** Merged `origin/master` back into `dev` so the branches reconverge
