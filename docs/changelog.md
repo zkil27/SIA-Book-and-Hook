@@ -7,7 +7,21 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
-## 2026-09-05 — Admin login shows demo username; variants are now add/removable
+## 2026-09-05 — Add Username field to admin login
+
+**What:** Added the missing **Username** textbox to `AdminLogin` in
+`app/StoreApp.tsx` (above the existing Password field), backed by a new `user`
+state. The login check now requires both `user === "admin"` and
+`pw === "admin123"`; the error message changed to "Incorrect username or
+password." This matches the login card in the provided screenshot, which showed a
+Username field the code did not yet render.
+
+**Why:** User pointed out the screenshot's admin Username textbox was absent —
+the demo hint listed "User: admin" but there was no field to enter it.
+
+**Impact:** Prototype UI only — still fake client-side auth, not the real
+NextAuth Credentials flow. No schema, dependency, or scope changes. Verified with
+`getDiagnostics` (no errors; only pre-existing Tailwind v4 class warnings).
 
 **What:** Two prototype-UI fixes in `app/StoreApp.tsx`:
 - **Admin login (`AdminLogin`):** the demo-credentials hint now shows both the

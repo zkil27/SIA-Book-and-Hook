@@ -204,11 +204,12 @@ type View = "client" | "admin" | "payment" | "track" | "about" | "contact";
 // ─── Admin Login ──────────────────────────────────────────────────────────────
 
 function AdminLogin({ onUnlock }: { onUnlock: () => void }) {
+  const [user, setUser] = useState("");
   const [pw, setPw] = useState("");
   const [error, setError] = useState(false);
 
   function attempt() {
-    if (pw === "admin123") { onUnlock(); }
+    if (user === "admin" && pw === "admin123") { onUnlock(); }
     else { setError(true); setPw(""); }
   }
 
@@ -221,6 +222,16 @@ function AdminLogin({ onUnlock }: { onUnlock: () => void }) {
         </div>
         <div className="flex flex-col gap-4">
           <div>
+            <Label sub>Username</Label>
+            <div className="mt-1">
+              <FieldInput
+                placeholder="Enter username"
+                value={user}
+                onChange={v => { setUser(v); setError(false); }}
+              />
+            </div>
+          </div>
+          <div>
             <Label sub>Password</Label>
             <div className="mt-1">
               <FieldInput
@@ -229,7 +240,7 @@ function AdminLogin({ onUnlock }: { onUnlock: () => void }) {
                 onChange={v => { setPw(v); setError(false); }}
               />
             </div>
-            {error && <p className="text-xs text-red-500 mt-1.5">Incorrect password. Please try again.</p>}
+            {error && <p className="text-xs text-red-500 mt-1.5">Incorrect username or password. Please try again.</p>}
           </div>
           <Btn label="Log In" filled full onClick={attempt} />
           <p className="text-center text-xs text-[#7AACB8]">Demo credentials · User: <span className="font-mono font-semibold text-[#3899AE]">admin</span> · Pass: <span className="font-mono font-semibold text-[#3899AE]">admin123</span></p>
