@@ -1,5 +1,6 @@
 import "server-only";
 import prisma from "@/lib/prisma";
+import { FALLBACK_CATEGORIES, FALLBACK_PRODUCTS } from "./fallback-catalog";
 
 /**
  * Storefront product shape consumed by the client UI (app/StoreApp.tsx).
@@ -49,49 +50,66 @@ function unitFor(variantName: string): string {
  * Active products, one card per variant, with ledger-derived stock.
  */
 export async function getStorefrontProducts(): Promise<StorefrontProduct[]> {
-  const products = await prisma.product.findMany({
-    where: { active: true },
-    include: {
-      category: true,
-      variants: {
-        include: {
-          stockMovements: { select: { quantity: true } },
+  try {
+    const products = await prisma.product.findMany({
+      where: { active: true },
+      include: {
+        category: true,
+        variants: {
+          include: {
+            stockMovements: { select: { quantity: true } },
+          },
         },
       },
-    },
-    orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
-  });
+      orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
+    });
 
-  const rows: StorefrontProduct[] = [];
-  for (const p of products) {
-    for (const v of p.variants) {
-      const stock = v.stockMovements.reduce((sum, m) => sum + m.quantity, 0);
-      const multiVariant = p.variants.length > 1;
-      rows.push({
-        id: v.id,
-        productId: p.id,
-        variantId: v.id,
-        name: multiVariant ? `${p.name} — ${v.name}` : p.name,
-        category: p.category.name,
-        categorySlug: p.category.slug,
-        price: Math.round(v.priceCentavos) / 100,
-        unit: unitFor(v.name),
-        stock,
-        status: statusFor(stock),
-      });
+    const rows: StorefrontProduct[] = [];
+    for (const p of products) {
+      for (const v of p.variants) {
+        const stock = v.stockMovements.reduce((sum, m) => sum + m.quantity, 0);
+        const multiVariant = p.variants.length > 1;
+        rows.push({
+          id: v.id,
+          productId: p.id,
+          variantId: v.id,
+          name: multiVariant ? `${p.name} — ${v.name}` : p.name,
+          category: p.category.name,
+          categorySlug: p.category.slug,
+          price: Math.round(v.priceCentavos) / 100,
+          unit: unitFor(v.name),
+          stock,
+          status: statusFor(stock),
+        });
+      }
     }
+    return rows;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[lib/products] Database query failed (${message.slice(0, 80)}...). Using fallback catalog.`
+    );
+    return FALLBACK_PRODUCTS;
   }
-  return rows;
 }
 
 /**
  * Distinct categories that have at least one active product, for the filter row.
  */
 export async function getStorefrontCategories(): Promise<StorefrontCategory[]> {
-  const cats = await prisma.category.findMany({
-    where: { products: { some: { active: true } } },
-    orderBy: { name: "asc" },
-    select: { name: true, slug: true },
-  });
-  return cats;
+  try {
+    const cats = await prisma.category.findMany({
+      where: { products: { some: { active: true } } },
+      orderBy: { name: "asc" },
+      select: { name: true, slug: true },
+    });
+    if (cats.length > 0) return cats;
+    return FALLBACK_CATEGORIES;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[lib/products] Database query failed (${message.slice(0, 80)}...). Using fallback categories.`
+    );
+    return FALLBACK_CATEGORIES;
+  }
 }

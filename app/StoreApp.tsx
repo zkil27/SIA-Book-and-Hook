@@ -5,17 +5,21 @@ const frame15Logo = "/imports/Frame_15.png";
 const frame151Logo = "/imports/Frame_15-1.png";
 const frame19Logo = "/imports/Frame_19.png";
 
-// ─── Brand palette ────────────────────────────────────────────────────────────
-// Primary:       #3899AE   buttons, active states
-// Primary mid:   #419DB2   hover
-// Primary light: #85CDDB   secondary elements
-// Accent:        #9CEFE3   tags, badges, highlights
-// Surface:       #DFF3F5   page bg, card tints
-// White:         #FFFFFF   cards, nav
-// Text dark:     #1C4F5A   headings
-// Text mid:      #3A6B76   body
-// Text muted:    #7AACB8   labels, captions
-// Border:        #B8E4EC   card borders, dividers
+// ─── Design system: Logo-matched (teal / cyan / mint) ───────────────────────────
+// Tokens live in app/globals.css as CSS variables — use them, don't hardcode hex.
+//   --ink #103A45      text + hairline outlines + MONEY/prices (mono, neutral data)
+//   --teal #34A6BD     brand primary   --teal-deep #1C6E80  admin chrome / dark bands
+//   --cyan #58C6DB     bright logo cyan: secondary highlights / brand "Box" / data viz
+//   --aqua #B7ECEB     logo mint fill: highlights / tags
+//   --accent #FF7A4D   complementary warm pop — primary CTA + true alerts ONLY
+//                      (--accent-ink #C7431F for accent text on paper)
+//   --marigold #F5B841 low stock / warnings          --plum #6B5B95  tertiary variety
+//   --paper #EAF6F6 / --paper-2 #D8EEEE  mint-tinted canvas   --card #F8FDFD  surfaces
+//   NOTE: --coral/--coral-ink/--shadow-coral are legacy aliases → --accent* (kept for
+//   the remaining CTA/alert call sites; brand + money were moved off them in the reskin).
+// Type: font-display (Archivo Expanded) · body Inter · font-mono (Space Mono) for data/prices/IDs.
+// Structure: rounded surfaces (--radius/-sm/-lg), hairline --line borders, soft diffuse
+// shadows (--shadow-hard/-sm/-accent). Boldness lives in the warm accent + type, not strokes.
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -97,34 +101,38 @@ function Btn({
   label: string; filled?: boolean; outline?: boolean; small?: boolean;
   onClick?: () => void; active?: boolean; disabled?: boolean; white?: boolean; full?: boolean;
 }) {
-  const sz = small ? "px-3 py-1.5 text-xs" : "px-5 py-2.5 text-sm";
+  // Quiet-editorial buttons: pill-rounded, hairline outline, soft diffuse lift
+  // on the primary (filled) action only — boldness lives in coral, not strokes.
+  const sz = small ? "px-3.5 py-1.5 text-xs" : "px-5 py-2.5 text-sm";
   const w = full ? "w-full" : "";
+  const base = `${sz} ${w} rounded-[var(--radius-sm)] font-semibold uppercase tracking-wide transition-all active:translate-y-[1px]`;
   if (disabled)
-    return <button disabled className={`${sz} ${w} bg-[#DFF3F5] text-[#7AACB8] rounded-lg font-medium cursor-not-allowed`}>{label}</button>;
+    return <button disabled className={`${sz} ${w} rounded-[var(--radius-sm)] border border-[color:var(--line)] bg-[color:var(--paper-2)] text-[color:var(--muted)] font-semibold uppercase tracking-wide cursor-not-allowed`}>{label}</button>;
   if (white)
-    return <button onClick={onClick} className={`${sz} ${w} bg-white text-[#3899AE] rounded-lg font-semibold hover:bg-[#DFF3F5] transition-colors`}>{label}</button>;
+    return <button onClick={onClick} className={`${base} bg-[color:var(--paper)] text-[color:var(--ink)] border border-[color:var(--line)] shadow-[var(--shadow-hard-sm)] hover:bg-white`}>{label}</button>;
   if (filled || active)
-    return <button onClick={onClick} className={`${sz} ${w} bg-[#3899AE] text-white rounded-lg font-semibold hover:bg-[#419DB2] transition-colors`}>{label}</button>;
+    return <button onClick={onClick} className={`${base} bg-[color:var(--coral)] text-white border border-transparent shadow-[var(--shadow-coral)] hover:brightness-105`}>{label}</button>;
   if (outline)
-    return <button onClick={onClick} className={`${sz} ${w} border-2 border-white text-white rounded-lg font-semibold hover:bg-white/10 transition-colors`}>{label}</button>;
-  return <button onClick={onClick} className={`${sz} ${w} bg-white border border-[#3899AE] text-[#3899AE] rounded-lg font-semibold hover:bg-[#DFF3F5] transition-colors`}>{label}</button>;
+    return <button onClick={onClick} className={`${base} bg-transparent text-white border border-white/60 hover:bg-white/10`}>{label}</button>;
+  return <button onClick={onClick} className={`${base} bg-white text-[color:var(--ink)] border border-[color:var(--line)] hover:bg-[color:var(--paper-2)]`}>{label}</button>;
 }
 
 function Tag({ label, color = "accent" }: { label: string; color?: "accent" | "white" | "muted" }) {
+  const base = "inline-block text-[10px] font-bold px-2 py-0.5 uppercase tracking-wider font-mono rounded-full border";
   if (color === "white")
-    return <span className="inline-block bg-white/20 text-white text-[10px] font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wide">{label}</span>;
+    return <span className={`${base} bg-white/15 text-white border-white/40`}>{label}</span>;
   if (color === "muted")
-    return <span className="inline-block border border-[#B8E4EC] text-[#7AACB8] text-[10px] font-medium px-2.5 py-0.5 rounded-full uppercase tracking-wide">{label}</span>;
-  return <span className="inline-block bg-[#9CEFE3] text-[#1C4F5A] text-[10px] font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wide">{label}</span>;
+    return <span className={`${base} bg-transparent text-[color:var(--muted)] border-[color:var(--line)]`}>{label}</span>;
+  return <span className={`${base} bg-[color:var(--aqua)] text-[color:var(--ink)] border-transparent`}>{label}</span>;
 }
 
 function Label({ children, sub = false }: { children: React.ReactNode; sub?: boolean }) {
-  if (sub) return <span className="text-xs text-[#7AACB8]">{children}</span>;
-  return <span className="text-xs font-semibold text-[#3A6B76] uppercase tracking-wider">{children}</span>;
+  if (sub) return <span className="text-[11px] text-[color:var(--muted)] font-mono">{children}</span>;
+  return <span className="eyebrow font-bold text-[color:var(--ink)]">{children}</span>;
 }
 
 function Divider() {
-  return <div className="w-full h-px bg-[#B8E4EC] my-4" />;
+  return <div className="w-full border-t border-[color:var(--line)] my-4" />;
 }
 
 function FieldInput({ placeholder, value, onChange, type = "text" }: {
@@ -133,32 +141,30 @@ function FieldInput({ placeholder, value, onChange, type = "text" }: {
   return (
     <input type={type} value={value} onChange={e => onChange?.(e.target.value)}
       readOnly={!onChange} placeholder={placeholder}
-      className="w-full border border-[#B8E4EC] rounded-lg px-4 py-2.5 text-sm text-[#1C4F5A] placeholder-[#7AACB8] bg-white outline-none focus:border-[#3899AE] transition-colors" />
+      className="w-full border border-[color:var(--line)] rounded-[var(--radius-sm)] px-3.5 py-2.5 text-sm text-[color:var(--ink)] placeholder-[color:var(--muted)] bg-white outline-none focus:border-[color:var(--teal)] focus:shadow-[var(--shadow-hard-sm)] transition-all" />
   );
 }
 
 function ImgFrame({ label, aspect = "aspect-[4/3]" }: { label?: string; aspect?: string }) {
   return (
-    <div className={`w-full ${aspect} bg-gradient-to-br from-[#DFF3F5] to-[#C8EDF3] flex flex-col items-center justify-center gap-1.5 relative overflow-hidden`}>
-      <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-[#9CEFE3]/30" />
-      <div className="absolute bottom-1 left-1 w-5 h-5 rounded-full bg-[#3899AE]/10" />
-      <div className="text-[#85CDDB]"><IcFish size={34} /></div>
-      {label && <span className="text-[10px] text-[#85CDDB] font-medium uppercase tracking-wide text-center px-3 leading-tight relative">{label}</span>}
+    <div className={`w-full ${aspect} bg-[color:var(--paper-2)] border-b border-[color:var(--line)] flex flex-col items-center justify-center gap-1.5 relative overflow-hidden`}>
+      <div className="text-[color:var(--teal)]"><IcFish size={34} /></div>
+      {label && <span className="text-[10px] text-[color:var(--muted)] font-mono uppercase tracking-wide text-center px-3 leading-tight">{label}</span>}
     </div>
   );
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`bg-white border border-[#B8E4EC] rounded-2xl ${className}`}>{children}</div>;
+  return <div className={`bg-[color:var(--card)] border border-[color:var(--line)] rounded-[var(--radius)] ${className}`}>{children}</div>;
 }
 
 function BrandLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const iconCls = size === "sm" ? "h-6 w-6" : size === "lg" ? "h-12 w-12" : "h-8 w-8";
   const textCls = size === "sm" ? "text-base" : size === "lg" ? "text-3xl" : "text-xl";
   return (
-    <span className={`inline-flex items-center gap-2 font-['Russo_One'] ${textCls} tracking-tight`}>
+    <span className={`inline-flex items-center gap-2 font-display font-extrabold ${textCls} tracking-tight`}>
       <img src={vectorLogo} alt="" className={`${iconCls} object-contain`} />
-      <span><span className="text-[#3899AE]">Hook&</span><span className="text-[#9CEFE3]">Box</span></span>
+      <span><span className="text-[color:var(--teal)]">Hook&</span><span className="text-[color:var(--cyan)]">Box</span></span>
     </span>
   );
 }
@@ -189,13 +195,30 @@ const ORDERS = [
   { id: "#HB-004", customer: "Pedro Lim", items: "Alimasag 2kg, Tahong 500g", total: 960, status: "Delivered", date: "Aug 30, 2026", payment: "GCash" },
 ];
 
+// Stock movement ledger — the append-only audit trail (the demo centerpiece).
+// SEAM: this is representative mock data. When the real StockMovement table is
+// wired, replace MOVEMENTS with rows from the DB (variant, quantity, reason,
+// createdAt) passed in as a prop — quantities are integers, +add / −remove,
+// and rows are NEVER edited: a correction is a new compensating movement.
+type Movement = { id: string; sku: string; item: string; qty: number; reason: string; at: string };
+const MOVEMENTS: Movement[] = [
+  { id: "MV-0001", sku: "HB-FIS-BANGUS-1KG", item: "Bangus 1kg", qty: 120, reason: "Initial stock", at: "Aug 28 · 08:12" },
+  { id: "MV-0002", sku: "HB-CRU-HIPON-1KG", item: "Hipon 1kg", qty: 60, reason: "Initial stock", at: "Aug 28 · 08:15" },
+  { id: "MV-0003", sku: "HB-FIS-BANGUS-1KG", item: "Bangus 1kg", qty: -2, reason: "Order #HB-001", at: "Sep 01 · 09:41" },
+  { id: "MV-0004", sku: "HB-CRU-HIPON-1KG", item: "Hipon 1kg", qty: -1, reason: "Order #HB-001", at: "Sep 01 · 09:41" },
+  { id: "MV-0005", sku: "HB-FIS-BANGUS-1KG", item: "Bangus 1kg", qty: -5, reason: "Spoilage — damaged in transit", at: "Sep 02 · 17:03" },
+  { id: "MV-0006", sku: "HB-FIS-BANGUS-1KG", item: "Bangus 1kg", qty: 5, reason: "Correction of MV-0005 (miscount)", at: "Sep 02 · 17:20" },
+  { id: "MV-0007", sku: "HB-CRA-ALIMANGO-1KG", item: "Alimango 1kg", qty: 24, reason: "Restock — morning catch", at: "Sep 03 · 06:30" },
+  { id: "MV-0008", sku: "HB-CRA-ALIMANGO-1KG", item: "Alimango 1kg", qty: -1, reason: "Order #HB-003", at: "Sep 03 · 11:08" },
+];
+
 const STATUS_STEPS = ["Pending", "Confirmed", "Out for Delivery", "Delivered"];
 const TEAM = [
-  { name: "Pam", role: "The Visionary", initial: "P", grad: "from-[#3899AE] to-[#9CEFE3]" },
-  { name: "Ichan", role: "The Chef Brain", initial: "I", grad: "from-[#2B7D90] to-[#3899AE]" },
-  { name: "Chels", role: "The Planner", initial: "C", grad: "from-[#85CDDB] to-[#9CEFE3]" },
-  { name: "Kiel", role: "The Negotiator", initial: "K", grad: "from-[#1C4F5A] to-[#3899AE]" },
-  { name: "EJ", role: "The Tech Guy", initial: "E", grad: "from-[#419DB2] to-[#85CDDB]" },
+  { name: "Pam", role: "The Visionary", initial: "P" },
+  { name: "Ichan", role: "The Chef Brain", initial: "I" },
+  { name: "Chels", role: "The Planner", initial: "C" },
+  { name: "Kiel", role: "The Negotiator", initial: "K" },
+  { name: "EJ", role: "The Tech Guy", initial: "E" },
 ];
 
 type CartItem = { id: string; name: string; price: number; unit: string; qty: number };
@@ -214,15 +237,15 @@ function AdminLogin({ onUnlock }: { onUnlock: () => void }) {
   }
 
   return (
-    <div className="h-full bg-[#DFF3F5] flex items-center justify-center p-6">
-      <Card className="w-full max-w-sm p-8 shadow-lg">
+    <div className="h-full bg-[color:var(--teal-deep)] flex items-center justify-center p-6">
+      <Card className="w-full max-w-sm p-8 shadow-[6px_6px_0_var(--shadow-ink)]">
         <div className="text-center mb-7">
           <BrandLogo size="lg" />
-          <p className="text-sm text-[#7AACB8] mt-1 font-medium">Admin Portal</p>
+          <p className="eyebrow text-[color:var(--muted)] mt-2">{"// Admin Portal"}</p>
         </div>
         <div className="flex flex-col gap-4">
           <div>
-            <Label sub>Username</Label>
+            <Label>Username</Label>
             <div className="mt-1">
               <FieldInput
                 placeholder="Enter username"
@@ -232,7 +255,7 @@ function AdminLogin({ onUnlock }: { onUnlock: () => void }) {
             </div>
           </div>
           <div>
-            <Label sub>Password</Label>
+            <Label>Password</Label>
             <div className="mt-1">
               <FieldInput
                 type="password" placeholder="Enter admin password"
@@ -240,10 +263,10 @@ function AdminLogin({ onUnlock }: { onUnlock: () => void }) {
                 onChange={v => { setPw(v); setError(false); }}
               />
             </div>
-            {error && <p className="text-xs text-red-500 mt-1.5">Incorrect username or password. Please try again.</p>}
+            {error && <p className="text-xs font-mono text-[color:var(--coral-ink)] mt-1.5">Incorrect username or password. Please try again.</p>}
           </div>
           <Btn label="Log In" filled full onClick={attempt} />
-          <p className="text-center text-xs text-[#7AACB8]">Demo credentials · User: <span className="font-mono font-semibold text-[#3899AE]">admin</span> · Pass: <span className="font-mono font-semibold text-[#3899AE]">admin123</span></p>
+          <p className="text-center text-[11px] font-mono text-[color:var(--muted)]">Demo · user <span className="font-bold text-[color:var(--ink)]">admin</span> · pass <span className="font-bold text-[color:var(--ink)]">admin123</span></p>
         </div>
       </Card>
     </div>
@@ -288,45 +311,45 @@ function ClientView({ products, categories, onCheckout, onNavigate }: {
   function removeFromCart(id: string) { setCart(prev => prev.filter(i => i.id !== id)); }
 
   const stockColor = (s: string) =>
-    s === "In Stock" ? "text-emerald-600" : s === "Low Stock" ? "text-amber-500" : "text-red-500";
+    s === "In Stock" ? "text-[color:var(--teal)]" : s === "Low Stock" ? "text-[color:var(--marigold)]" : "text-[color:var(--coral-ink)]";
 
   return (
-    <div className="flex flex-col h-full bg-[#DFF3F5]">
+    <div className="flex flex-col h-full bg-[color:var(--paper)]">
       {/* Nav */}
-      <nav className="bg-white border-b border-[#B8E4EC] px-4 md:px-6 py-3 shrink-0 shadow-sm">
+      <nav className="bg-[color:var(--paper)] border-b-2 border-[color:var(--line)] px-4 md:px-6 py-3 shrink-0">
         <div className="flex items-center justify-between gap-3">
           <BrandLogo />
-          <div className="hidden md:flex items-center gap-7">
-            <span className="text-sm font-semibold text-[#3899AE] border-b-2 border-[#3899AE] pb-0.5">Shop</span>
+          <div className="hidden md:flex items-center gap-6 font-mono text-xs uppercase tracking-wider">
+            <span className="font-bold text-[color:var(--ink)] border-b-2 border-[color:var(--teal)] pb-0.5">Shop</span>
             {(["about","track","contact"] as View[]).map((v, i) => (
               <span key={v} onClick={() => onNavigate(v)}
-                className="text-sm text-[#7AACB8] hover:text-[#3899AE] cursor-pointer transition-colors font-medium">
+                className="text-[color:var(--muted)] hover:text-[color:var(--ink)] cursor-pointer transition-colors">
                 {["About","Track Order","Contact"][i]}
               </span>
             ))}
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setSearchOpen(!searchOpen)}
-              className="hidden md:flex items-center gap-1.5 border border-[#B8E4EC] rounded-lg px-3 py-1.5 text-xs text-[#7AACB8] hover:border-[#3899AE] hover:text-[#3899AE] transition-colors">
+              className="hidden md:flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[color:var(--line)] px-3 py-1.5 text-xs font-mono uppercase tracking-wide text-[color:var(--ink)] hover:bg-[color:var(--paper-2)] transition-colors">
               <IcSearch size={13} /> Search
             </button>
             <button onClick={() => setMenuOpen(!menuOpen)}
-              className="md:hidden border border-[#B8E4EC] rounded-lg px-2.5 py-1.5 text-[#3899AE]">
+              className="md:hidden rounded-[var(--radius-sm)] border border-[color:var(--line)] px-2.5 py-1.5 text-[color:var(--ink)]">
               <IcMenu size={16} />
             </button>
             <button onClick={() => setCartOpen(true)}
-              className="flex items-center gap-1.5 bg-[#3899AE] hover:bg-[#419DB2] text-white rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors">
+              className="flex items-center gap-1.5 bg-[color:var(--coral)] text-white rounded-[var(--radius-sm)] border border-transparent shadow-[var(--shadow-coral)] active:translate-y-[1px] px-4 py-1.5 text-sm font-bold uppercase tracking-wide transition-all">
               <IcCart size={14} /> Cart
-              {cartCount > 0 && <span className="bg-white text-[#3899AE] font-bold text-[10px] px-1.5 py-0.5 rounded-full">{cartCount}</span>}
+              {cartCount > 0 && <span className="bg-white text-[color:var(--ink)] font-bold text-[10px] font-mono px-1.5 py-0.5 border border-[color:var(--line)]">{cartCount}</span>}
             </button>
           </div>
         </div>
         {menuOpen && (
-          <div className="md:hidden border-t border-[#B8E4EC] mt-3 pt-3 flex flex-col gap-1">
-            <span className="text-sm font-semibold text-[#3899AE] py-1.5 px-1">Shop</span>
+          <div className="md:hidden border-t-2 border-[color:var(--line)] mt-3 pt-3 flex flex-col gap-1 font-mono text-xs uppercase tracking-wider">
+            <span className="font-bold text-[color:var(--ink)] py-1.5 px-1">Shop</span>
             {(["about","track","contact"] as View[]).map((v, i) => (
               <span key={v} onClick={() => { onNavigate(v); setMenuOpen(false); }}
-                className="text-sm text-[#3A6B76] py-1.5 px-1 cursor-pointer hover:text-[#3899AE]">
+                className="text-[color:var(--muted)] py-1.5 px-1 cursor-pointer hover:text-[color:var(--ink)]">
                 {["About","Track Order","Contact"][i]}
               </span>
             ))}
@@ -335,68 +358,59 @@ function ClientView({ products, categories, onCheckout, onNavigate }: {
       </nav>
 
       {searchOpen && (
-        <div className="bg-white border-b border-[#B8E4EC] px-4 md:px-6 py-3 shrink-0">
+        <div className="bg-[color:var(--paper-2)] border-b-2 border-[color:var(--line)] px-4 md:px-6 py-3 shrink-0">
           <FieldInput placeholder="Search for bangus, hipon, alimango…" value={search} onChange={setSearch} />
         </div>
       )}
 
       <div className="flex flex-1 overflow-hidden relative">
         <div className="flex-1 overflow-y-auto">
-          {/* Hero */}
-          <div className="relative bg-gradient-to-br from-[#3899AE] via-[#3899AE] to-[#2B7D90] overflow-hidden">
-            {/* Decorative bubbles */}
-            <div className="absolute top-4 right-8 w-32 h-32 rounded-full bg-white/5 blur-2xl pointer-events-none" />
-            <div className="absolute -bottom-6 left-1/4 w-48 h-48 rounded-full bg-[#9CEFE3]/10 blur-3xl pointer-events-none" />
-            <div className="px-4 md:px-10 pt-8 pb-4 flex flex-col md:flex-row items-center gap-6 text-white">
-              <div className="flex-1">
-                <Tag label="Fresh Catch · Dasmariñas" color="white" />
-                <h1 className="font-['Russo_One'] text-4xl md:text-5xl text-white leading-tight mt-3 mb-3">
-                  Order Fresh<br />Seafood Online
+          {/* Hero — editorial: oversized headline, mono eyebrow, one offset-shadow image block */}
+          <div className="border-b-2 border-[color:var(--line)] bg-[color:var(--teal)]">
+            <div className="px-4 md:px-10 pt-8 pb-9 flex flex-col md:flex-row items-center gap-8 md:gap-10">
+              <div className="flex-1 w-full">
+                <p className="eyebrow text-white/90 mb-4">Fresh Catch <span className="text-[color:var(--aqua)]">{"//"}</span> Dasmariñas City</p>
+                <h1 className="font-display font-black text-white leading-[0.92] tracking-tight text-5xl md:text-7xl mb-5">
+                  ORDER<br />FRESH<br /><span className="text-[color:var(--aqua)]">SEAFOOD.</span>
                 </h1>
-                <p className="text-[#DFF3F5]/90 text-sm md:text-base mb-6 leading-relaxed max-w-sm">
-                  Skip the market. Get the freshest catch delivered straight to your door in Dasmariñas City.
+                <p className="text-white/90 text-sm md:text-base mb-7 leading-relaxed max-w-md">
+                  Skip the market. The freshest daily catch, boxed and delivered straight to your door.
                 </p>
                 <div className="flex gap-3 flex-wrap">
-                  <Btn label="Order Now" white />
-                  <Btn label="View Menu" outline />
+                  <Btn label="Order Now" filled onClick={() => onNavigate("client")} />
+                  <Btn label="View Menu" white />
                 </div>
               </div>
-              <div className="w-44 md:w-72 shrink-0 relative flex items-center justify-center">
-                <div className="absolute w-40 h-40 md:w-64 md:h-64 rounded-full bg-[#9CEFE3]/20 blur-2xl" />
-                <img src={frame151Logo} alt="" aria-hidden="true"
-                  className="relative w-full object-contain drop-shadow-2xl animate-float" />
+              <div className="w-52 md:w-80 shrink-0">
+                <div className="bg-[color:var(--paper)] border-2 border-[color:var(--line)] shadow-[6px_6px_0_var(--shadow-ink)] p-5 flex items-center justify-center">
+                  <img src={frame151Logo} alt="" aria-hidden="true" className="w-full object-contain" />
+                </div>
               </div>
-            </div>
-            {/* Wave divider */}
-            <div className="relative h-12 -mb-1">
-              <svg viewBox="0 0 1440 48" preserveAspectRatio="none" className="absolute inset-0 w-full h-full" fill="#ffffff">
-                <path d="M0,24 C240,48 480,0 720,24 C960,48 1200,8 1440,24 L1440,48 L0,48 Z" />
-              </svg>
             </div>
           </div>
 
           {/* Category filter */}
-          <div className="mx-4 md:mx-6 mt-5">
-            <div className="flex items-end gap-3 mb-1">
-              <h2 className="font-['Russo_One'] text-2xl text-[#1C4F5A]">Our Products</h2>
-              <div className="w-8 h-1.5 bg-[#9CEFE3] rounded-full mb-1.5" />
+          <div className="mx-4 md:mx-6 mt-7">
+            <div className="flex items-baseline gap-3 mb-1 flex-wrap">
+              <h2 className="font-display font-extrabold text-3xl md:text-4xl text-[color:var(--ink)] uppercase tracking-tight">Our Products</h2>
+              <span className="eyebrow text-[color:var(--muted)]">{"// Sourced fresh every morning"}</span>
             </div>
-            <p className="text-xs text-[#7AACB8] mb-4 font-medium">Sourced fresh every morning — Dasmariñas City</p>
-            <div className="flex gap-2 mb-5 flex-wrap">
+            <div className="border-t-2 border-[color:var(--line)] mt-2 mb-5" />
+            <div className="flex gap-2 mb-6 flex-wrap">
               {categoryNames.map(c => (
                 <button key={c} onClick={() => setActiveCategory(c)}
-                  className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 ${activeCategory === c ? "bg-[#3899AE] text-white shadow-md scale-105" : "bg-white border border-[#B8E4EC] text-[#3A6B76] hover:border-[#3899AE] hover:text-[#3899AE] hover:scale-105"}`}>
+                  className={`px-4 py-1.5 text-xs font-bold font-mono uppercase tracking-wide rounded-full border border-[color:var(--line)] transition-all ${activeCategory === c ? "bg-[color:var(--ink)] text-[color:var(--paper)] border-transparent" : "bg-[color:var(--paper)] text-[color:var(--ink)] hover:bg-[color:var(--aqua)]"}`}>
                   {c}
                 </button>
               ))}
             </div>
 
             {filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-                <div className="text-[#B8E4EC]"><IcFish size={44} /></div>
-                <p className="text-sm text-[#7AACB8]">
+              <div className="flex flex-col items-center justify-center gap-3 py-16 text-center border-2 border-dashed border-[color:var(--line)]">
+                <div className="text-[color:var(--teal)]"><IcFish size={44} /></div>
+                <p className="text-sm font-mono text-[color:var(--muted)]">
                   {query
-                    ? `No products match “${search.trim()}”.`
+                    ? `No products match "${search.trim()}".`
                     : "No products available in this category yet."}
                 </p>
               </div>
@@ -404,17 +418,17 @@ function ClientView({ products, categories, onCheckout, onNavigate }: {
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4">
               {filtered.map(p => (
-                <Card key={p.id} className="flex flex-col hover:shadow-lg hover:-translate-y-1 transition-all duration-200 overflow-hidden border-t-2 border-t-[#9CEFE3]">
+                <Card key={p.id} className="flex flex-col hover:shadow-[4px_4px_0_var(--shadow-ink)] hover:-translate-x-[2px] hover:-translate-y-[2px] transition-all duration-150 overflow-hidden">
                   <ImgFrame label={p.name} />
-                  <div className="p-4 flex flex-col gap-1 flex-1">
+                  <div className="p-4 flex flex-col gap-1.5 flex-1">
                     <Tag label={p.category} />
-                    <p className="text-sm font-semibold text-[#1C4F5A] mt-1.5">{p.name}</p>
-                    <p className="text-sm font-bold text-[#3899AE]">₱{p.price}<span className="text-xs font-normal text-[#7AACB8]">{p.unit}</span></p>
-                    <p className={`text-[11px] font-semibold ${stockColor(p.status)}`}>● {p.status}</p>
+                    <p className="text-sm font-bold text-[color:var(--ink)] mt-1 leading-tight">{p.name}</p>
+                    <p className="font-mono text-base font-bold text-[color:var(--ink)]">₱{p.price}<span className="text-[11px] font-normal text-[color:var(--muted)]">{p.unit}</span></p>
+                    <p className={`text-[11px] font-mono font-bold uppercase tracking-wide ${stockColor(p.status)}`}>● {p.status}</p>
                     <div className="mt-2">
                       <Btn label={p.status === "Out of Stock" ? "Unavailable" : "+ Add to Cart"}
                         filled={p.status !== "Out of Stock"} disabled={p.status === "Out of Stock"}
-                        small onClick={() => addToCart(p)} />
+                        small full onClick={() => addToCart(p)} />
                     </div>
                   </div>
                 </Card>
@@ -422,85 +436,72 @@ function ClientView({ products, categories, onCheckout, onNavigate }: {
             </div>
           </div>
 
-          {/* Why Choose — full-width teal band */}
-          <div className="mt-10 relative overflow-hidden">
-            {/* Top wave */}
-            <div className="h-10 relative">
-              <svg viewBox="0 0 1440 40" preserveAspectRatio="none" className="absolute inset-0 w-full h-full" fill="#3899AE">
-                <path d="M0,20 C360,40 1080,0 1440,20 L1440,40 L0,40 Z" />
-              </svg>
-            </div>
-            <div className="bg-[#3899AE] px-4 md:px-10 py-8">
-              <h2 className="font-['Russo_One'] text-2xl text-white mb-2 text-center">Why Choose Hook&Box?</h2>
-              <p className="text-[#DFF3F5]/80 text-xs text-center mb-7 font-medium">Fresh. Fast. Fuss-free.</p>
-              <div className="max-w-3xl mx-auto flex flex-col md:flex-row gap-4">
-                {[
-                  { icon: <IcHome size={26} />, title: "No Market Trips", desc: "Order from home and skip the commute and the crowd." },
-                  { icon: <IcFish size={26} />, title: "Fresh Daily Catch", desc: "Sourced fresh every morning — quality guaranteed." },
-                  { icon: <IcTruck size={26} />, title: "Fast Lalamove Delivery", desc: "Delivered straight to your door, same day." },
-                ].map(item => (
-                  <div key={item.title} className="flex-1 bg-white/10 border border-white/20 rounded-2xl p-5 flex gap-4 items-start backdrop-blur-sm hover:bg-white/15 transition-colors">
-                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white shrink-0">{item.icon}</div>
-                    <div>
-                      <p className="font-semibold text-white text-sm">{item.title}</p>
-                      <p className="text-xs text-[#DFF3F5]/80 mt-1 leading-relaxed">{item.desc}</p>
-                    </div>
+          {/* Why Choose — bordered 3-up row on deep teal */}
+          <div className="mt-10 border-t-2 border-b-2 border-[color:var(--line)] bg-[color:var(--teal-deep)] px-4 md:px-10 py-9">
+            <p className="eyebrow text-[color:var(--aqua)] mb-1">{"// Why Hook&Box"}</p>
+            <h2 className="font-display font-black text-3xl md:text-4xl text-white uppercase tracking-tight mb-6">Fresh. Fast. Fuss-free.</h2>
+            <div className="grid md:grid-cols-3 gap-0 border-2 border-[color:var(--line)]">
+              {[
+                { icon: <IcHome size={24} />, no: "01", title: "No Market Trips", desc: "Order from home and skip the commute and the crowd." },
+                { icon: <IcFish size={24} />, no: "02", title: "Fresh Daily Catch", desc: "Sourced fresh every morning — quality guaranteed." },
+                { icon: <IcTruck size={24} />, no: "03", title: "Fast Lalamove Delivery", desc: "Delivered straight to your door, same day." },
+              ].map((item, i) => (
+                <div key={item.title} className={`bg-[color:var(--paper)] p-5 flex flex-col gap-2.5 ${i < 2 ? "border-b-2 md:border-b-0 md:border-r-2 border-[color:var(--line)]" : ""}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="w-11 h-11 bg-[color:var(--aqua)] border-2 border-[color:var(--line)] flex items-center justify-center text-[color:var(--ink)]">{item.icon}</div>
+                    <span className="font-mono font-bold text-2xl text-[color:var(--ink)]/20">{item.no}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-            {/* Bottom wave */}
-            <div className="h-10 relative bg-[#DFF3F5]">
-              <svg viewBox="0 0 1440 40" preserveAspectRatio="none" className="absolute inset-0 w-full h-full" fill="#3899AE">
-                <path d="M0,20 C360,0 1080,40 1440,20 L1440,0 L0,0 Z" />
-              </svg>
+                  <p className="font-bold text-[color:var(--ink)] text-sm">{item.title}</p>
+                  <p className="text-xs text-[color:var(--muted)] leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
         {/* Cart drawer */}
         {cartOpen && (
-          <div className="fixed inset-0 z-50 bg-white flex flex-col md:static md:inset-auto md:z-auto md:w-80 md:shrink-0 md:border-l md:border-[#B8E4EC]">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[#B8E4EC]">
-              <span className="flex items-center gap-2 font-semibold text-[#1C4F5A]">
-                <IcCart size={16} className="text-[#3899AE]" /> Your Cart
+          <div className="fixed inset-0 z-50 bg-[color:var(--paper)] flex flex-col md:static md:inset-auto md:z-auto md:w-80 md:shrink-0 md:border-l-2 md:border-[color:var(--line)]">
+            <div className="flex items-center justify-between px-5 py-4 border-b-2 border-[color:var(--line)] bg-[color:var(--paper)]">
+              <span className="flex items-center gap-2 font-display font-extrabold uppercase tracking-tight text-[color:var(--ink)]">
+                <IcCart size={16} className="text-[color:var(--coral)]" /> Your Cart
               </span>
-              <button onClick={() => setCartOpen(false)} className="text-[#7AACB8] hover:text-[#3899AE] text-lg">✕</button>
+              <button onClick={() => setCartOpen(false)} aria-label="Close cart" className="text-[color:var(--ink)] hover:text-[color:var(--coral)] text-lg font-mono">✕</button>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3 bg-[#DFF3F5]">
+            <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-3 bg-[color:var(--paper-2)]">
               {cart.length === 0 ? (
                 <div className="text-center mt-12 flex flex-col items-center gap-3">
-                  <div className="text-[#B8E4EC]"><IcFish size={44} /></div>
-                  <p className="text-sm text-[#7AACB8]">Your cart is empty.</p>
-                  <p className="text-xs text-[#7AACB8]">Add some fresh seafood!</p>
+                  <div className="text-[color:var(--teal)]"><IcFish size={44} /></div>
+                  <p className="text-sm font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]">Cart is empty</p>
+                  <p className="text-xs text-[color:var(--muted)]">Add some fresh seafood to get started.</p>
                 </div>
               ) : cart.map(item => (
                 <Card key={item.id} className="flex items-start gap-3 p-3">
-                  <div className="w-12 h-12 bg-[#DFF3F5] rounded-lg border border-[#B8E4EC] flex items-center justify-center text-[#85CDDB] shrink-0">
+                  <div className="w-12 h-12 bg-[color:var(--paper-2)] border-2 border-[color:var(--line)] flex items-center justify-center text-[color:var(--teal)] shrink-0">
                     <IcFish size={22} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-[#1C4F5A] truncate">{item.name}</p>
-                    <p className="text-[11px] text-[#7AACB8]">₱{item.price} {item.unit} × {item.qty}</p>
-                    <p className="text-sm font-bold text-[#3899AE]">₱{item.price * item.qty}</p>
+                    <p className="text-xs font-bold text-[color:var(--ink)] truncate">{item.name}</p>
+                    <p className="text-[11px] font-mono text-[color:var(--muted)]">₱{item.price} {item.unit} × {item.qty}</p>
+                    <p className="font-mono text-sm font-bold text-[color:var(--ink)]">₱{item.price * item.qty}</p>
                   </div>
-                  <button onClick={() => removeFromCart(item.id)} className="text-[#7AACB8] hover:text-red-400 text-sm mt-0.5">✕</button>
+                  <button onClick={() => removeFromCart(item.id)} aria-label={`Remove ${item.name}`} className="text-[color:var(--muted)] hover:text-[color:var(--coral)] text-sm mt-0.5 font-mono">✕</button>
                 </Card>
               ))}
             </div>
-            <div className="px-5 py-4 border-t border-[#B8E4EC] bg-white">
-              <div className="flex justify-between text-sm text-[#3A6B76] mb-1"><span>Subtotal</span><span>₱{cartTotal}</span></div>
-              <div className="flex justify-between text-xs text-[#7AACB8] mb-1">
+            <div className="px-5 py-4 border-t-2 border-[color:var(--line)] bg-[color:var(--paper)] font-mono">
+              <div className="flex justify-between text-sm text-[color:var(--ink)] mb-1"><span>Subtotal</span><span>₱{cartTotal}</span></div>
+              <div className="flex justify-between text-xs text-[color:var(--muted)] mb-1">
                 <span>Delivery (Lalamove)</span>
                 <span className="flex items-center gap-1">
                   {deliveryFee === 0
-                    ? <><span className="text-emerald-600 font-semibold">FREE</span></>
+                    ? <span className="text-[color:var(--teal)] font-bold">FREE</span>
                     : `₱${deliveryFee}`}
                 </span>
               </div>
-              {deliveryFee > 0 && <p className="text-[10px] text-[#7AACB8] mb-2">Free delivery on orders ₱500+</p>}
-              <div className="flex justify-between font-bold text-[#1C4F5A] text-base mb-4 pt-2 border-t border-[#B8E4EC]">
-                <span>Total</span><span className="text-[#3899AE]">₱{cartTotal + deliveryFee}</span>
+              {deliveryFee > 0 && <p className="text-[10px] text-[color:var(--muted)] mb-2">Free delivery on orders ₱500+</p>}
+              <div className="flex justify-between font-bold text-[color:var(--ink)] text-base mb-4 pt-2 border-t-2 border-dashed border-[color:var(--line)]">
+                <span>Total</span><span className="text-[color:var(--ink)]">₱{cartTotal + deliveryFee}</span>
               </div>
               {cart.length > 0 && (
                 <Btn label="Proceed to Checkout →" filled full onClick={() => { setCartOpen(false); onCheckout(cart); }} />
@@ -516,7 +517,7 @@ function ClientView({ products, categories, onCheckout, onNavigate }: {
 // ─── Admin View ───────────────────────────────────────────────────────────────
 
 function AdminView({ products, onLock }: { products: Product[]; onLock: () => void }) {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "orders">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "orders" | "ledger">("dashboard");
   const [inventory, setInventory] = useState<Product[]>(products);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editStock, setEditStock] = useState("");
@@ -554,37 +555,38 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
     { key: "dashboard" as const, icon: <IcChart size={15} />, label: "Dashboard" },
     { key: "inventory" as const, icon: <IcBox size={15} />, label: "Inventory" },
     { key: "orders" as const, icon: <IcDoc size={15} />, label: "Orders" },
+    { key: "ledger" as const, icon: <IcClock size={15} />, label: "Ledger" },
   ];
 
   return (
-    <div className="flex flex-col md:flex-row h-full bg-[#DFF3F5]">
+    <div className="flex flex-col md:flex-row h-full bg-[color:var(--paper)]">
       {/* Mobile tab strip */}
-      <div className="md:hidden flex bg-[#1C4F5A] shrink-0 overflow-x-auto">
+      <div className="md:hidden flex bg-[color:var(--teal-deep)] shrink-0 overflow-x-auto border-b-2 border-[color:var(--line)]">
         {tabs.map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className={`px-5 py-3 text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === t.key ? "bg-[#3899AE] text-white" : "text-[#85CDDB] hover:text-white"}`}>
+            className={`px-5 py-3 text-xs font-mono font-bold uppercase tracking-wide whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === t.key ? "bg-[color:var(--coral)] text-white" : "text-[color:var(--aqua)] hover:text-white"}`}>
             {t.icon} {t.label}
           </button>
         ))}
       </div>
 
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-56 bg-[#1C4F5A] flex-col shrink-0">
-        <div className="px-5 py-5 border-b border-white/10">
+      <aside className="hidden md:flex w-56 bg-[color:var(--teal-deep)] flex-col shrink-0 border-r-2 border-[color:var(--line)]">
+        <div className="px-5 py-5 border-b-2 border-[color:var(--line)]">
           <BrandLogo size="md" />
-          <p className="text-[10px] text-[#85CDDB] mt-1 uppercase tracking-widest">Admin Portal</p>
+          <p className="eyebrow text-[color:var(--aqua)] mt-2">{"// Admin Portal"}</p>
         </div>
         <nav className="flex flex-col py-3 gap-0.5 flex-1">
           {tabs.map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
-              className={`text-left px-5 py-3 text-sm font-medium flex items-center gap-3 transition-colors ${activeTab === t.key ? "bg-[#3899AE] text-white" : "text-[#85CDDB] hover:bg-white/5 hover:text-white"}`}>
+              className={`text-left px-5 py-3 text-sm font-mono font-bold uppercase tracking-wide flex items-center gap-3 transition-colors border-l-4 ${activeTab === t.key ? "bg-[color:var(--coral)] text-white border-l-white" : "text-[color:var(--aqua)] border-l-transparent hover:bg-white/5 hover:text-white"}`}>
               {t.icon}{t.label}
             </button>
           ))}
         </nav>
-        <div className="px-5 py-4 border-t border-white/10">
-          <p className="text-[10px] text-[#85CDDB] mb-2">Logged in as Admin</p>
-          <button onClick={onLock} className="w-full text-xs border border-white/20 text-[#85CDDB] hover:border-white hover:text-white py-2 rounded-lg transition-colors">
+        <div className="px-5 py-4 border-t-2 border-[color:var(--line)]">
+          <p className="text-[10px] font-mono text-[color:var(--aqua)] mb-2 uppercase tracking-wide">Logged in as Admin</p>
+          <button onClick={onLock} className="w-full text-xs font-mono font-bold uppercase tracking-wide border-2 border-[color:var(--aqua)]/40 text-[color:var(--aqua)] hover:border-white hover:text-white py-2 transition-colors">
             Log Out
           </button>
         </div>
@@ -595,15 +597,15 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
 
           {activeTab === "dashboard" && (
             <>
-              <h2 className="font-['Russo_One'] text-2xl text-[#1C4F5A] mb-5">Dashboard</h2>
+              <h2 className="font-display font-extrabold text-3xl md:text-4xl text-[color:var(--ink)] uppercase tracking-tight mb-5">Dashboard</h2>
 
               {lowItems.length > 0 && (
-                <div className="mb-5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                  <p className="text-sm text-amber-700 font-medium flex items-center gap-2">
-                    <IcWarning size={16} className="text-amber-500 shrink-0" />
+                <div className="mb-5 bg-[color:var(--marigold)] border-2 border-[color:var(--line)] shadow-[3px_3px_0_var(--shadow-ink)] px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-sm text-[color:var(--ink)] font-bold flex items-center gap-2">
+                    <IcWarning size={16} className="text-[color:var(--ink)] shrink-0" />
                     {lowItems.length} item{lowItems.length > 1 ? "s" : ""} need attention: {lowItems.map(i => i.name).join(", ")}
                   </p>
-                  <button onClick={() => setActiveTab("inventory")} className="text-xs underline text-amber-600 whitespace-nowrap font-semibold">
+                  <button onClick={() => setActiveTab("inventory")} className="text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)] underline whitespace-nowrap">
                     Go to Inventory →
                   </button>
                 </div>
@@ -611,17 +613,17 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 {[
-                  { label: "Orders Today", value: "24", sub: "Sep 1, 2026", icon: <IcDoc size={18} className="text-[#3899AE]" />, accent: "border-l-[#3899AE]", valColor: "text-[#3899AE]" },
-                  { label: "Revenue Today", value: "₱12,480", sub: "+8% vs yesterday", icon: <IcPeso size={18} className="text-emerald-500" />, accent: "border-l-emerald-400", valColor: "text-emerald-600" },
-                  { label: "Stock Alerts", value: String(lowItems.length), sub: "Low / out of stock", icon: <IcWarning size={18} className="text-amber-500" />, accent: "border-l-amber-400", valColor: "text-amber-500" },
-                  { label: "Pending Orders", value: String(pending), sub: "Needs confirmation", icon: <IcClock size={18} className="text-[#85CDDB]" />, accent: "border-l-[#85CDDB]", valColor: "text-[#3899AE]" },
+                  { label: "Orders Today", value: "24", sub: "Sep 1, 2026", icon: <IcDoc size={18} className="text-[color:var(--teal)]" />, accent: "border-t-[color:var(--teal)]", valColor: "text-[color:var(--ink)]" },
+                  { label: "Revenue Today", value: "₱12,480", sub: "+8% vs yesterday", icon: <IcPeso size={18} className="text-[color:var(--teal)]" />, accent: "border-t-[color:var(--cyan)]", valColor: "text-[color:var(--ink)]" },
+                  { label: "Stock Alerts", value: String(lowItems.length), sub: "Low / out of stock", icon: <IcWarning size={18} className="text-[color:var(--marigold)]" />, accent: "border-t-[color:var(--marigold)]", valColor: "text-[color:var(--ink)]" },
+                  { label: "Pending Orders", value: String(pending), sub: "Needs confirmation", icon: <IcClock size={18} className="text-[color:var(--plum)]" />, accent: "border-t-[color:var(--plum)]", valColor: "text-[color:var(--ink)]" },
                 ].map(card => (
-                  <Card key={card.label} className={`p-5 border-l-4 ${card.accent} hover:shadow-md transition-shadow`}>
+                  <Card key={card.label} className={`p-5 border-t-8 ${card.accent}`}>
                     <div className="flex items-start justify-between">
                       <Label>{card.label}</Label>
                       {card.icon}
                     </div>
-                    <p className={`font-['Russo_One'] text-2xl mt-1 ${card.valColor}`}>{card.value}</p>
+                    <p className={`font-mono font-bold text-2xl mt-1 ${card.valColor}`}>{card.value}</p>
                     <Label sub>{card.sub}</Label>
                   </Card>
                 ))}
@@ -630,11 +632,11 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
               <div className="grid md:grid-cols-2 gap-4 mb-6">
                 <Card className="p-5">
                   <Label>Sales This Week</Label>
-                  <div className="flex items-end gap-2 mt-4 h-32">
+                  <div className="flex items-end gap-2 mt-4 h-32 border-b-2 border-[color:var(--line)] pb-0">
                     {[40, 65, 55, 80, 90, 70, 48].map((h, i) => (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                        <div className="w-full rounded-t-md bg-[#3899AE] hover:bg-[#419DB2] transition-colors" style={{ height: `${h}%` }} />
-                        <span className="text-[9px] text-[#7AACB8] font-medium">{["M","T","W","T","F","S","S"][i]}</span>
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                        <div className="w-full bg-[color:var(--teal)] border-2 border-[color:var(--line)] border-b-0" style={{ height: `${h}%` }} />
+                        <span className="text-[9px] font-mono text-[color:var(--muted)]">{["M","T","W","T","F","S","S"][i]}</span>
                       </div>
                     ))}
                   </div>
@@ -649,11 +651,11 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                       { name: "Pusit", pct: 48 },
                     ].map(item => (
                       <div key={item.name} className="flex items-center gap-3">
-                        <span className="text-xs text-[#3A6B76] font-medium w-20">{item.name}</span>
-                        <div className="flex-1 h-2.5 bg-[#DFF3F5] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#3899AE] rounded-full" style={{ width: `${item.pct}%` }} />
+                        <span className="text-xs font-mono text-[color:var(--ink)] w-20">{item.name}</span>
+                        <div className="flex-1 h-3 bg-[color:var(--paper-2)] border-2 border-[color:var(--line)] overflow-hidden">
+                          <div className="h-full bg-[color:var(--teal)]" style={{ width: `${item.pct}%` }} />
                         </div>
-                        <span className="text-[10px] text-[#7AACB8] w-8 text-right">{item.pct}%</span>
+                        <span className="text-[10px] font-mono text-[color:var(--muted)] w-8 text-right">{item.pct}%</span>
                       </div>
                     ))}
                   </div>
@@ -665,19 +667,19 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                 <div className="overflow-x-auto mt-3">
                   <table className="w-full text-sm min-w-[480px]">
                     <thead>
-                      <tr className="border-b border-[#B8E4EC]">
+                      <tr className="border-b-2 border-[color:var(--line)]">
                         {["Order ID","Customer","Total","Payment","Status"].map(h => (
-                          <th key={h} className="text-left text-[11px] text-[#7AACB8] font-semibold uppercase tracking-wider pb-2 pr-4">{h}</th>
+                          <th key={h} className="text-left text-[11px] font-mono text-[color:var(--muted)] font-bold uppercase tracking-wider pb-2 pr-4">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {ORDERS.map(o => (
-                        <tr key={o.id} className="border-b border-[#DFF3F5] hover:bg-[#F5FBFC]">
-                          <td className="py-3 pr-4 text-xs font-mono font-bold text-[#3899AE]">{o.id}</td>
-                          <td className="py-3 pr-4 text-xs text-[#3A6B76] font-medium">{o.customer}</td>
-                          <td className="py-3 pr-4 text-xs font-bold text-[#1C4F5A]">₱{o.total}</td>
-                          <td className="py-3 pr-4"><Tag label={o.payment} /></td>
+                        <tr key={o.id} className="border-b border-[color:var(--line)]/25 hover:bg-[color:var(--paper-2)]">
+                          <td className="py-3 pr-4 text-xs font-mono font-bold text-[color:var(--teal)]">{o.id}</td>
+                          <td className="py-3 pr-4 text-xs text-[color:var(--ink)] font-medium">{o.customer}</td>
+                          <td className="py-3 pr-4 text-xs font-mono font-bold text-[color:var(--ink)]">₱{o.total}</td>
+                          <td className="py-3 pr-4"><Tag label={o.payment} color="muted" /></td>
                           <td className="py-3"><Tag label={o.status} color={o.status === "Delivered" ? "muted" : "accent"} /></td>
                         </tr>
                       ))}
@@ -691,44 +693,44 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
           {activeTab === "inventory" && (
             <>
               <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-                <h2 className="font-['Russo_One'] text-2xl text-[#1C4F5A]">Inventory</h2>
+                <h2 className="font-display font-extrabold text-3xl md:text-4xl text-[color:var(--ink)] uppercase tracking-tight">Inventory</h2>
                 <Btn label="+ Add Product" filled small onClick={() => setAddOpen(true)} />
               </div>
               <div className="flex gap-3 mb-3 flex-wrap items-center">
                 <div className="flex-1 min-w-[160px]"><FieldInput placeholder="Search products…" value={invSearch} onChange={setInvSearch} /></div>
                 <div className="relative">
                   <select value={invCategory} onChange={e => setInvCategory(e.target.value)}
-                    className="appearance-none border border-[#B8E4EC] rounded-lg pl-3.5 pr-9 py-2.5 text-sm text-[#1C4F5A] bg-white outline-none focus:border-[#3899AE] transition-colors cursor-pointer font-medium">
+                    className="appearance-none border-2 border-[color:var(--line)] rounded-[var(--radius)] pl-3.5 pr-9 py-2.5 text-sm font-mono text-[color:var(--ink)] bg-white outline-none focus:shadow-[3px_3px_0_var(--shadow-ink)] transition-shadow cursor-pointer">
                     {invCategories.map(c => (
                       <option key={c} value={c}>{c === "All" ? "All categories" : c}</option>
                     ))}
                   </select>
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7AACB8]">
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--ink)]">
                     <svg width={14} height={14} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 7 5 5 5-5"/></svg>
                   </span>
                 </div>
               </div>
               <div className="flex gap-2 mb-4 flex-wrap items-center">
-                <div className="inline-flex rounded-lg border border-[#B8E4EC] bg-white p-0.5">
+                <div className="inline-flex border-2 border-[color:var(--line)] bg-white">
                   {([
                     { key: "All", label: "All", dot: "" },
-                    { key: "In Stock", label: "In stock", dot: "bg-emerald-500" },
-                    { key: "Low Stock", label: "Low", dot: "bg-amber-400" },
-                    { key: "Out of Stock", label: "Out", dot: "bg-red-500" },
-                  ] as const).map(s => (
+                    { key: "In Stock", label: "In stock", dot: "bg-[color:var(--teal)]" },
+                    { key: "Low Stock", label: "Low", dot: "bg-[color:var(--marigold)]" },
+                    { key: "Out of Stock", label: "Out", dot: "bg-[color:var(--coral)]" },
+                  ] as const).map((s, i) => (
                     <button key={s.key} onClick={() => setInvStatus(s.key)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${invStatus === s.key ? "bg-[#3899AE] text-white" : "text-[#3A6B76] hover:text-[#3899AE]"}`}>
-                      {s.dot && <span className={`w-1.5 h-1.5 rounded-full ${invStatus === s.key ? "bg-white" : s.dot}`} />}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wide transition-colors ${i > 0 ? "border-l-2 border-[color:var(--line)]" : ""} ${invStatus === s.key ? "bg-[color:var(--ink)] text-[color:var(--paper)]" : "text-[color:var(--ink)] hover:bg-[color:var(--paper-2)]"}`}>
+                      {s.dot && <span className={`w-1.5 h-1.5 ${invStatus === s.key ? "bg-white" : s.dot}`} />}
                       {s.label}
                     </button>
                   ))}
                 </div>
-                <span className="text-xs text-[#7AACB8] font-medium ml-1">
+                <span className="text-xs font-mono text-[color:var(--muted)] ml-1">
                   Showing {filteredInventory.length} of {inventory.length}
                 </span>
                 {filtersActive && (
                   <button onClick={() => { setInvSearch(""); setInvCategory("All"); setInvStatus("All"); }}
-                    className="text-xs text-[#3899AE] hover:underline font-semibold ml-auto">
+                    className="text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--coral-ink)] hover:underline ml-auto">
                     Clear filters
                   </button>
                 )}
@@ -736,16 +738,16 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
               <Card className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[700px]">
                   <thead>
-                    <tr className="border-b border-[#B8E4EC] bg-[#F5FBFC]">
+                    <tr className="border-b-2 border-[color:var(--line)] bg-[color:var(--paper-2)]">
                       {["#","Product","Category","Price","Unit","Stock","Status","Actions"].map(h => (
-                        <th key={h} className="text-left text-[11px] text-[#7AACB8] font-semibold uppercase tracking-wider px-5 py-3">{h}</th>
+                        <th key={h} className="text-left text-[11px] font-mono text-[color:var(--ink)] font-bold uppercase tracking-wider px-5 py-3">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredInventory.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-5 py-10 text-center text-sm text-[#7AACB8]">
+                        <td colSpan={8} className="px-5 py-10 text-center text-sm font-mono text-[color:var(--muted)]">
                           {filtersActive
                             ? "No products match these filters. Try clearing them."
                             : "No products yet."}
@@ -753,34 +755,34 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                       </tr>
                     )}
                     {filteredInventory.map((p, idx) => (
-                      <tr key={p.id} className="border-b border-[#DFF3F5] hover:bg-[#F5FBFC] transition-colors">
-                        <td className="px-5 py-3 text-xs text-[#7AACB8]">{idx + 1}</td>
-                        <td className="px-5 py-3 text-sm font-semibold text-[#1C4F5A]">{p.name}</td>
+                      <tr key={p.id} className="border-b border-[color:var(--line)]/25 hover:bg-[color:var(--paper-2)] transition-colors">
+                        <td className="px-5 py-3 text-xs font-mono text-[color:var(--muted)]">{idx + 1}</td>
+                        <td className="px-5 py-3 text-sm font-bold text-[color:var(--ink)]">{p.name}</td>
                         <td className="px-5 py-3"><Tag label={p.category} /></td>
-                        <td className="px-5 py-3 text-sm font-bold text-[#3899AE]">₱{p.price}</td>
-                        <td className="px-5 py-3 text-xs text-[#7AACB8]">{p.unit}</td>
+                        <td className="px-5 py-3 text-sm font-mono font-bold text-[color:var(--ink)]">₱{p.price}</td>
+                        <td className="px-5 py-3 text-xs font-mono text-[color:var(--muted)]">{p.unit}</td>
                         <td className="px-5 py-3">
                           {editingId === p.id ? (
                             <div className="flex gap-1.5 items-center">
                               <input autoFocus value={editStock} onChange={e => setEditStock(e.target.value)}
                                 onKeyDown={e => e.key === "Enter" && saveStock(p.id)}
-                                className="border border-[#B8E4EC] rounded-lg px-2 py-1 text-xs w-16 outline-none focus:border-[#3899AE]" />
+                                className="border-2 border-[color:var(--line)] rounded-[var(--radius)] px-2 py-1 text-xs font-mono w-16 outline-none focus:shadow-[2px_2px_0_var(--shadow-ink)]" />
                               <Btn label="Save" filled small onClick={() => saveStock(p.id)} />
                             </div>
                           ) : (
-                            <span className={`text-sm font-bold ${p.stock === 0 ? "text-red-500" : p.stock <= 10 ? "text-amber-500" : "text-[#1C4F5A]"}`}>{p.stock}</span>
+                            <span className={`text-sm font-mono font-bold ${p.stock === 0 ? "text-[color:var(--coral-ink)]" : p.stock <= 10 ? "text-[color:var(--marigold)]" : "text-[color:var(--ink)]"}`}>{p.stock}</span>
                           )}
                         </td>
                         <td className="px-5 py-3">
-                          <span className={`text-[11px] font-semibold ${p.status === "In Stock" ? "text-emerald-600" : p.status === "Low Stock" ? "text-amber-500" : "text-red-500"}`}>
+                          <span className={`text-[11px] font-mono font-bold uppercase tracking-wide ${p.status === "In Stock" ? "text-[color:var(--teal)]" : p.status === "Low Stock" ? "text-[color:var(--marigold)]" : "text-[color:var(--coral-ink)]"}`}>
                             ● {p.status}
                           </span>
                         </td>
                         <td className="px-5 py-3">
-                          <div className="flex gap-3">
+                          <div className="flex gap-3 font-mono">
                             <button onClick={() => { setEditingId(p.id); setEditStock(String(p.stock)); }}
-                              className="text-xs text-[#3899AE] hover:underline font-semibold">Edit</button>
-                            <button className="text-xs text-red-400 hover:underline font-semibold">Remove</button>
+                              className="text-xs text-[color:var(--teal)] hover:underline font-bold uppercase tracking-wide">Edit</button>
+                            <button className="text-xs text-[color:var(--coral-ink)] hover:underline font-bold uppercase tracking-wide">Remove</button>
                           </div>
                         </td>
                       </tr>
@@ -794,10 +796,10 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
           {activeTab === "orders" && (
             <>
               <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-                <h2 className="font-['Russo_One'] text-2xl text-[#1C4F5A]">Orders</h2>
+                <h2 className="font-display font-extrabold text-3xl md:text-4xl text-[color:var(--ink)] uppercase tracking-tight">Orders</h2>
                 <div className="flex gap-2 flex-wrap">
                   {["All","Pending","Confirmed","Out for Delivery","Delivered"].map(s => (
-                    <button key={s} className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${s === "All" ? "bg-[#3899AE] text-white" : "bg-white border border-[#B8E4EC] text-[#3A6B76] hover:border-[#3899AE]"}`}>{s}</button>
+                    <button key={s} className={`px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wide border-2 border-[color:var(--line)] transition-colors ${s === "All" ? "bg-[color:var(--ink)] text-[color:var(--paper)]" : "bg-[color:var(--paper)] text-[color:var(--ink)] hover:bg-[color:var(--aqua)]"}`}>{s}</button>
                   ))}
                 </div>
               </div>
@@ -806,17 +808,17 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                   <Card key={o.id} className="p-5 flex flex-col md:flex-row md:items-center gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-mono text-sm font-bold text-[#3899AE]">{o.id}</span>
+                        <span className="font-mono text-sm font-bold text-[color:var(--teal)]">{o.id}</span>
                         <Tag label={o.status} color={o.status === "Delivered" ? "muted" : "accent"} />
                         <Tag label={o.payment} color="muted" />
                         <Tag label="Lalamove" color="muted" />
                       </div>
-                      <p className="text-sm font-semibold text-[#1C4F5A]">{o.customer}</p>
-                      <p className="text-xs text-[#7AACB8] mt-0.5">{o.items}</p>
-                      <p className="text-[10px] text-[#7AACB8] mt-1">{o.date}</p>
+                      <p className="text-sm font-bold text-[color:var(--ink)]">{o.customer}</p>
+                      <p className="text-xs text-[color:var(--muted)] mt-0.5">{o.items}</p>
+                      <p className="text-[10px] font-mono text-[color:var(--muted)] mt-1">{o.date}</p>
                     </div>
                     <div className="flex flex-col items-start md:items-end gap-2">
-                      <p className="font-['Russo_One'] text-xl text-[#3899AE]">₱{o.total}</p>
+                      <p className="font-mono font-bold text-xl text-[color:var(--ink)]">₱{o.total}</p>
                       <div className="flex gap-2 flex-wrap">
                         <Btn label="View Details" small />
                         {o.status === "Pending" && <Btn label="Confirm Order" filled small />}
@@ -829,6 +831,8 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
               </div>
             </>
           )}
+
+          {activeTab === "ledger" && <StockLedger />}
         </div>
       </div>
 
@@ -839,6 +843,103 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
         />
       )}
     </div>
+  );
+}
+
+// ─── Stock Ledger (the signature) ─────────────────────────────────────────────
+// Append-only receipt tape. Additions in teal, removals in coral, running
+// balance on the right. Rows are never edited — a mistake is corrected with a
+// new compensating movement (see MV-0005 → MV-0006 below).
+
+function StockLedger() {
+  // Running balance across the whole tape (chronological, as printed).
+  const rows = MOVEMENTS.reduce<(Movement & { balance: number })[]>((acc, m) => {
+    const prev = acc.length ? acc[acc.length - 1].balance : 0;
+    acc.push({ ...m, balance: prev + m.qty });
+    return acc;
+  }, []);
+  const balance = rows.length ? rows[rows.length - 1].balance : 0;
+  const totalIn = MOVEMENTS.filter(m => m.qty > 0).reduce((s, m) => s + m.qty, 0);
+  const totalOut = MOVEMENTS.filter(m => m.qty < 0).reduce((s, m) => s + m.qty, 0);
+
+  return (
+    <>
+      <div className="flex items-baseline gap-3 mb-1 flex-wrap">
+        <h2 className="font-display font-extrabold text-3xl md:text-4xl text-[color:var(--ink)] uppercase tracking-tight">Stock Ledger</h2>
+        <span className="eyebrow text-[color:var(--muted)]">{"// Append-only · never edited"}</span>
+      </div>
+      <p className="text-sm text-[color:var(--muted)] mb-6 max-w-lg">
+        Every stock change is one immutable line. Corrections are new lines that cancel
+        the mistake — the history stays intact.
+      </p>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="bg-[color:var(--card)] border-2 border-[color:var(--line)] rounded-[var(--radius-lg)] px-4 py-3">
+          <p className="eyebrow text-[color:var(--muted)]">Movements</p>
+          <p className="font-display font-black text-2xl text-[color:var(--ink)]">{rows.length}</p>
+        </div>
+        <div className="bg-[color:var(--card)] border-2 border-[color:var(--line)] rounded-[var(--radius-lg)] px-4 py-3">
+          <p className="eyebrow text-[color:var(--muted)]">Total In</p>
+          <p className="font-display font-black text-2xl text-[color:var(--teal)]">+{totalIn}</p>
+        </div>
+        <div className="bg-[color:var(--card)] border-2 border-[color:var(--line)] rounded-[var(--radius-lg)] px-4 py-3">
+          <p className="eyebrow text-[color:var(--muted)]">Total Out</p>
+          <p className="font-display font-black text-2xl text-[color:var(--coral-ink)]">{totalOut}</p>
+        </div>
+        <div className="bg-[color:var(--card)] border-2 border-[color:var(--line)] rounded-[var(--radius-lg)] px-4 py-3">
+          <p className="eyebrow text-[color:var(--muted)]">On Hand</p>
+          <p className="font-display font-black text-2xl text-[color:var(--ink)]">{balance}</p>
+        </div>
+      </div>
+
+      {/* Full-width ledger table */}
+      <div className="bg-[color:var(--card)] border-2 border-[color:var(--line)] rounded-[var(--radius-lg)] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-[color:var(--teal-deep)] text-[color:var(--card)] text-left">
+                <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wider font-semibold">Ref</th>
+                <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wider font-semibold">Date / Time</th>
+                <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wider font-semibold">Item</th>
+                <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wider font-semibold">Reason</th>
+                <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wider font-semibold text-right">Qty</th>
+                <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wider font-semibold text-right">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr
+                  key={r.id}
+                  className={`border-t border-[color:var(--line)] ${i % 2 ? "bg-[color:var(--paper)]/40" : ""}`}
+                >
+                  <td className="px-4 py-3 font-mono text-xs text-[color:var(--muted)] whitespace-nowrap">{r.id}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-[color:var(--muted)] whitespace-nowrap">{r.at}</td>
+                  <td className="px-4 py-3">
+                    <p className="font-bold text-[color:var(--ink)]">{r.item}</p>
+                    <p className="font-mono text-[10px] text-[color:var(--muted)]/70">{r.sku}</p>
+                  </td>
+                  <td className="px-4 py-3 text-[color:var(--muted)]">{r.reason}</td>
+                  <td className={`px-4 py-3 text-right font-mono font-bold whitespace-nowrap ${r.qty < 0 ? "text-[color:var(--coral-ink)]" : "text-[color:var(--teal)]"}`}>
+                    {r.qty > 0 ? `+${r.qty}` : r.qty}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono font-bold text-[color:var(--ink)] whitespace-nowrap">{r.balance}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-[color:var(--line-strong)] bg-[color:var(--paper-2)]/50">
+                <td colSpan={4} className="px-4 py-3 font-display font-bold uppercase tracking-tight text-[color:var(--ink)] text-right">On Hand</td>
+                <td className="px-4 py-3 text-right font-mono text-xs text-[color:var(--muted)] whitespace-nowrap">
+                  <span className="text-[color:var(--teal)]">+{totalIn}</span> / <span className="text-[color:var(--coral-ink)]">{totalOut}</span>
+                </td>
+                <td className="px-4 py-3 text-right font-display font-black text-lg text-[color:var(--ink)] whitespace-nowrap">{balance}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -877,18 +978,18 @@ function AddProductModal({ categories, onClose }: { categories: string[]; onClos
   const catOptions = categories.length ? categories : ["Fish", "Shellfish", "Squid & Octopus", "Crustaceans"];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1C4F5A]/50 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[color:var(--ink)]/60" onClick={onClose}>
       <div
-        className="w-full max-w-xl max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden"
+        className="w-full max-w-xl max-h-[90vh] flex flex-col bg-[color:var(--paper)] border-2 border-[color:var(--line)] shadow-[6px_6px_0_var(--shadow-ink)] overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-[#3899AE] px-6 py-4 flex items-start justify-between shrink-0">
+        <div className="bg-[color:var(--teal)] border-b-2 border-[color:var(--line)] px-6 py-4 flex items-start justify-between shrink-0">
           <div>
-            <h3 className="font-['Russo_One'] text-lg text-white">Add New Product</h3>
-            <p className="text-xs text-white/80 mt-0.5">Fill in product details and at least one variant</p>
+            <h3 className="font-display font-extrabold text-lg text-white uppercase tracking-tight">Add New Product</h3>
+            <p className="text-xs font-mono text-white/85 mt-0.5">Fill in product details and at least one variant</p>
           </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white transition-colors mt-0.5" aria-label="Close">
+          <button onClick={onClose} className="text-white/85 hover:text-white transition-colors mt-0.5" aria-label="Close">
             <IcXCircle size={20} />
           </button>
         </div>
@@ -898,38 +999,38 @@ function AddProductModal({ categories, onClose }: { categories: string[]; onClos
           {/* Section 1 — Product info */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <span className="w-5 h-5 rounded-full bg-[#3899AE] text-white text-[11px] font-bold flex items-center justify-center">1</span>
+              <span className="w-6 h-6 bg-[color:var(--coral)] text-white border-2 border-[color:var(--line)] text-[11px] font-mono font-bold flex items-center justify-center">1</span>
               <Label>Product Info</Label>
             </div>
             <div className="flex flex-col gap-4">
               <div>
-                <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Product Name <span className="text-red-500">*</span></label>
+                <label className="block mb-1.5 text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]">Product Name <span className="text-[color:var(--coral-ink)]">*</span></label>
                 <FieldInput placeholder="e.g. Galunggong (Round Scad)" value={name} onChange={setName} />
               </div>
               <div>
-                <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Category <span className="text-red-500">*</span></label>
+                <label className="block mb-1.5 text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]">Category <span className="text-[color:var(--coral-ink)]">*</span></label>
                 <div className="relative">
                   <select value={category} onChange={e => setCategory(e.target.value)}
-                    className="w-full appearance-none border border-[#B8E4EC] rounded-lg pl-4 pr-9 py-2.5 text-sm text-[#1C4F5A] bg-white outline-none focus:border-[#3899AE] transition-colors cursor-pointer">
+                    className="w-full appearance-none border-2 border-[color:var(--line)] rounded-[var(--radius)] pl-4 pr-9 py-2.5 text-sm font-mono text-[color:var(--ink)] bg-white outline-none focus:shadow-[3px_3px_0_var(--shadow-ink)] transition-shadow cursor-pointer">
                     {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7AACB8]">
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--ink)]">
                     <svg width={14} height={14} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 7 5 5 5-5"/></svg>
                   </span>
                 </div>
               </div>
               <div>
-                <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Description <span className="text-[#7AACB8] font-normal">(optional)</span></label>
+                <label className="block mb-1.5 text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]">Description <span className="text-[color:var(--muted)] font-normal normal-case">(optional)</span></label>
                 <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
                   placeholder="Short description visible to customers…"
-                  className="w-full border border-[#B8E4EC] rounded-lg px-4 py-2.5 text-sm text-[#1C4F5A] placeholder-[#7AACB8] bg-white outline-none focus:border-[#3899AE] transition-colors resize-none" />
+                  className="w-full border-2 border-[color:var(--line)] rounded-[var(--radius)] px-4 py-2.5 text-sm text-[color:var(--ink)] placeholder-[color:var(--muted)] bg-white outline-none focus:shadow-[3px_3px_0_var(--shadow-ink)] transition-shadow resize-none" />
               </div>
               <div>
-                <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Product Photo <span className="text-[#7AACB8] font-normal">(optional)</span></label>
-                <div className="w-full border border-dashed border-[#B8E4EC] rounded-lg py-6 flex flex-col items-center justify-center gap-1.5 text-[#7AACB8] bg-[#F5FBFC]">
-                  <IcUpload size={22} className="text-[#85CDDB]" />
-                  <span className="text-sm font-medium text-[#3899AE]">Click to upload a photo</span>
-                  <span className="text-[11px] text-[#7AACB8]">JPG, PNG, WEBP · max ~5 MB</span>
+                <label className="block mb-1.5 text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]">Product Photo <span className="text-[color:var(--muted)] font-normal normal-case">(placeholder only)</span></label>
+                <div className="w-full border-2 border-dashed border-[color:var(--line)] py-6 flex flex-col items-center justify-center gap-1.5 text-[color:var(--muted)] bg-[color:var(--paper-2)]">
+                  <IcUpload size={22} className="text-[color:var(--teal)]" />
+                  <span className="text-sm font-mono font-bold text-[color:var(--ink)]">Upload a photo</span>
+                  <span className="text-[11px] font-mono text-[color:var(--muted)]">JPG, PNG, WEBP · max ~5 MB</span>
                 </div>
               </div>
             </div>
@@ -939,41 +1040,41 @@ function AddProductModal({ categories, onClose }: { categories: string[]; onClos
 
           {/* Section 2 — Variants */}
           <section>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="w-5 h-5 rounded-full bg-[#3899AE] text-white text-[11px] font-bold flex items-center justify-center">2</span>
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <span className="w-6 h-6 bg-[color:var(--coral)] text-white border-2 border-[color:var(--line)] text-[11px] font-mono font-bold flex items-center justify-center">2</span>
               <Label>Variants</Label>
-              <span className="text-xs text-[#7AACB8]">Price &amp; stock live here, not on the product</span>
+              <span className="text-xs font-mono text-[color:var(--muted)]">Price &amp; stock live here, not on the product</span>
             </div>
 
             <div className="flex flex-col gap-4">
               {variants.map((v, idx) => {
                 const suggestedSku = suggestSku(v.name);
                 return (
-                  <div key={idx} className="border border-[#B8E4EC] rounded-xl p-4 bg-[#F5FBFC]">
+                  <div key={idx} className="border-2 border-[color:var(--line)] p-4 bg-[color:var(--paper-2)]">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-[11px] font-bold text-[#3899AE] uppercase tracking-wider">Variant {idx + 1}</p>
+                      <p className="text-[11px] font-mono font-bold text-[color:var(--ink)] uppercase tracking-wider">Variant {idx + 1}</p>
                       {variants.length > 1 && (
                         <button type="button" onClick={() => removeVariant(idx)}
-                          className="text-[11px] text-[#7AACB8] hover:text-red-500 font-medium transition-colors">Remove</button>
+                          className="text-[11px] font-mono font-bold uppercase tracking-wide text-[color:var(--coral-ink)] hover:underline transition-colors">Remove</button>
                       )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
-                        <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Variant Name <span className="text-red-500">*</span></label>
+                        <label className="block mb-1.5 text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]">Variant Name <span className="text-[color:var(--coral-ink)]">*</span></label>
                         <FieldInput placeholder="e.g. 500g, Whole, Per Kilo" value={v.name} onChange={val => updateVariant(idx, { name: val })} />
                       </div>
                       <div>
-                        <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">SKU <span className="text-red-500">*</span></label>
+                        <label className="block mb-1.5 text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]">SKU <span className="text-[color:var(--coral-ink)]">*</span></label>
                         <FieldInput placeholder={suggestedSku} value={v.sku} onChange={val => updateVariant(idx, { sku: val })} />
                         <button type="button" onClick={() => updateVariant(idx, { sku: suggestedSku })}
-                          className="text-[11px] text-[#3899AE] hover:underline font-medium mt-1">Auto-suggest SKU</button>
+                          className="text-[11px] font-mono font-bold uppercase tracking-wide text-[color:var(--teal)] hover:underline mt-1">Auto-suggest SKU</button>
                       </div>
                       <div>
-                        <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Price (₱) <span className="text-red-500">*</span></label>
+                        <label className="block mb-1.5 text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]">Price (₱) <span className="text-[color:var(--coral-ink)]">*</span></label>
                         <FieldInput type="number" placeholder="₱ 0.00" value={v.price} onChange={val => updateVariant(idx, { price: val })} />
                       </div>
                       <div>
-                        <label className="block mb-1.5 text-sm font-medium text-[#3A6B76]">Initial Stock</label>
+                        <label className="block mb-1.5 text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]">Initial Stock</label>
                         <FieldInput type="number" placeholder="0 (adjust later)" value={v.stock} onChange={val => updateVariant(idx, { stock: val })} />
                       </div>
                     </div>
@@ -982,7 +1083,7 @@ function AddProductModal({ categories, onClose }: { categories: string[]; onClos
               })}
 
               <button type="button" onClick={addVariant}
-                className="w-full border border-dashed border-[#B8E4EC] rounded-xl py-3 text-sm font-semibold text-[#3899AE] hover:border-[#3899AE] hover:bg-[#F5FBFC] transition-colors">
+                className="w-full border-2 border-dashed border-[color:var(--line)] py-3 text-sm font-mono font-bold uppercase tracking-wide text-[color:var(--ink)] hover:bg-[color:var(--aqua)] transition-colors">
                 + Add Another Variant
               </button>
             </div>
@@ -990,7 +1091,7 @@ function AddProductModal({ categories, onClose }: { categories: string[]; onClos
         </div>
 
         {/* Footer */}
-        <div className="border-t border-[#B8E4EC] px-6 py-4 flex justify-end gap-3 shrink-0 bg-white">
+        <div className="border-t-2 border-[color:var(--line)] px-6 py-4 flex justify-end gap-3 shrink-0 bg-[color:var(--paper)]">
           <Btn label="Cancel" onClick={onClose} />
           <Btn label="Save Product" filled onClick={onClose} />
         </div>
@@ -1000,6 +1101,29 @@ function AddProductModal({ categories, onClose }: { categories: string[]; onClos
 }
 
 // ─── Payment View ─────────────────────────────────────────────────────────────
+
+// Quiet reassurance strip that fills the lower checkout column on short steps.
+// Restrained by design: hairline framing, one muted icon per item, one honest
+// line of copy. Content stays truthful to frozen scope (no real settlement,
+// Lalamove is a label, no real SMS). Reuses existing Ic* icons only.
+type Assurance = { icon: React.ReactNode; label: string; copy: string };
+function CheckoutNotes({ items }: { items: Assurance[] }) {
+  return (
+    <div className="border-t border-[color:var(--line)] pt-5 mt-1 grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
+      {items.map(it => (
+        <div key={it.label} className="flex items-start gap-3">
+          <span className="w-8 h-8 rounded-[var(--radius-sm)] bg-[color:var(--paper-2)] border border-[color:var(--line)] flex items-center justify-center text-[color:var(--teal)] shrink-0">
+            {it.icon}
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-[color:var(--ink)] leading-tight">{it.label}</p>
+            <p className="text-[11px] text-[color:var(--muted)] leading-snug mt-0.5">{it.copy}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () => void; onTrack: () => void }) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -1018,19 +1142,44 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
     <IcCheckCircle key="confirmation" size={16} />,
   ];
 
+  // Step-specific reassurance copy. Honest to frozen scope: Lalamove is a label,
+  // no money is captured, orders end PENDING, no real SMS is sent.
+  const STEP_NOTES: Record<1 | 2 | 3 | 4, Assurance[]> = {
+    1: [
+      { icon: <IcFish size={16} />, label: "Caught daily", copy: "Sourced from the morning catch, packed on ice." },
+      { icon: <IcClock size={16} />, label: "Priced by variant", copy: "Each size and cut is weighed and priced on its own." },
+      { icon: <IcCheckCircle size={16} />, label: "No surprises", copy: "The total here is the total you pay on delivery." },
+    ],
+    2: [
+      { icon: <IcTruck size={16} />, label: "Dasmariñas & nearby", copy: "We deliver across the city and adjacent barangays." },
+      { icon: <IcClock size={16} />, label: "Morning windows", copy: "Pick a slot; freshest stock goes out early." },
+      { icon: <IcFish size={16} />, label: "Packed cold", copy: "Every order leaves chilled to hold quality in transit." },
+    ],
+    3: [
+      { icon: <IcCard size={16} />, label: "Manual confirmation", copy: "We verify your GCash or COD choice before preparing the order." },
+      { icon: <IcCheckCircle size={16} />, label: "No card stored", copy: "Nothing is charged online; the total is settled on delivery." },
+      { icon: <IcPhone size={16} />, label: "Questions welcome", copy: "Reach the shop directly if you need to adjust an order." },
+    ],
+    4: [
+      { icon: <IcDoc size={16} />, label: "Order recorded", copy: "Your order is saved as pending and queued for prep." },
+      { icon: <IcFish size={16} />, label: "Being prepared", copy: "Staff pack your items once the order is confirmed." },
+      { icon: <IcTruck size={16} />, label: "Track anytime", copy: "Use your order ID to follow its status." },
+    ],
+  };
+
   return (
-    <div className="h-full bg-[#DFF3F5] overflow-y-auto">
+    <div className="h-full bg-[color:var(--paper)] overflow-y-auto">
       {/* Header */}
-      <div className="bg-white border-b border-[#B8E4EC] px-4 md:px-6 py-3.5 flex items-center gap-4 shadow-sm">
-        <button onClick={onBack} className="text-[#7AACB8] hover:text-[#3899AE] text-sm transition-colors flex items-center gap-1">
+      <div className="bg-[color:var(--paper)] border-b-2 border-[color:var(--line)] px-4 md:px-6 py-3.5 flex items-center gap-4">
+        <button onClick={onBack} className="text-[color:var(--ink)] hover:text-[color:var(--coral)] text-xs font-mono font-bold uppercase tracking-wide transition-colors flex items-center gap-1">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg> Back
         </button>
         <BrandLogo size="sm" />
-        <span className="text-sm text-[#7AACB8] font-medium">Checkout</span>
+        <span className="eyebrow text-[color:var(--muted)]">{"// Checkout"}</span>
       </div>
 
       {/* Step indicators */}
-      <div className="bg-white border-b border-[#B8E4EC] py-5 overflow-x-auto shadow-sm">
+      <div className="bg-[color:var(--paper-2)] border-b-2 border-[color:var(--line)] py-5 overflow-x-auto">
         <div className="flex items-center justify-center px-6 gap-0">
           {STEP_LABELS.map((label, idx) => {
             const n = idx + 1;
@@ -1039,13 +1188,13 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
             return (
               <div key={n} className="flex items-center">
                 <div className="flex flex-col items-center gap-1.5">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${done ? "border-[#3899AE] bg-[#3899AE] text-white shadow-md" : active ? "border-[#3899AE] bg-white text-[#3899AE] shadow-sm" : "border-[#B8E4EC] bg-white text-[#B8E4EC]"}`}>
+                  <div className={`w-10 h-10 flex items-center justify-center border-2 border-[color:var(--line)] transition-all duration-200 ${done ? "bg-[color:var(--teal)] text-white" : active ? "bg-[color:var(--coral)] text-white shadow-[3px_3px_0_var(--shadow-ink)]" : "bg-[color:var(--paper)] text-[color:var(--muted)]"}`}>
                     {done ? <IcCheckCircle size={17}/> : STEP_ICONS[idx]}
                   </div>
-                  <span className={`text-[10px] hidden sm:block whitespace-nowrap font-semibold transition-colors ${active ? "text-[#3899AE]" : done ? "text-[#85CDDB]" : "text-[#B8E4EC]"}`}>{label}</span>
+                  <span className={`text-[10px] hidden sm:block whitespace-nowrap font-mono font-bold uppercase tracking-wide transition-colors ${active ? "text-[color:var(--ink)]" : done ? "text-[color:var(--teal)]" : "text-[color:var(--muted)]"}`}>{label}</span>
                 </div>
                 {idx < 3 && (
-                  <div className={`w-10 md:w-20 h-0.5 mx-1 md:mx-2 mb-5 rounded-full transition-all duration-500 ${done ? "bg-gradient-to-r from-[#3899AE] to-[#85CDDB]" : "bg-[#B8E4EC]"}`} />
+                  <div className={`w-10 md:w-20 h-0.5 mx-1 md:mx-2 mb-5 transition-all duration-300 ${done ? "bg-[color:var(--teal)]" : "bg-[color:var(--ink)]/25"}`} />
                 )}
               </div>
             );
@@ -1053,26 +1202,26 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 md:px-6 py-8 flex flex-col md:flex-row gap-6">
-        <div className="flex-1 flex flex-col gap-4">
+      <div className="max-w-5xl mx-auto w-full px-4 md:px-6 py-8 flex flex-col md:flex-row gap-6 md:items-start">
+        <div className="w-full md:basis-[70%] md:min-w-0 flex flex-col gap-4">
 
           {step === 1 && (
             <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-[#3899AE] to-[#419DB2] px-6 py-4 flex items-center justify-between">
-                <h3 className="font-['Russo_One'] text-lg text-white">Order Summary</h3>
+              <div className="bg-[color:var(--teal)] border-b-2 border-[color:var(--line)] px-6 py-4 flex items-center justify-between">
+                <h3 className="font-display font-extrabold text-lg text-white uppercase tracking-tight">Order Summary</h3>
                 <Tag label={`${cart.length} item${cart.length !== 1 ? "s" : ""}`} color="white" />
               </div>
               <div className="p-6 flex flex-col gap-3">
                 {cart.map(item => (
-                  <div key={item.id} className="flex items-center gap-4 p-3 rounded-xl bg-[#F5FBFC] border border-[#DFF3F5] hover:border-[#B8E4EC] transition-colors">
-                    <div className="w-14 h-14 bg-gradient-to-br from-[#DFF3F5] to-[#C8EDF3] rounded-xl flex items-center justify-center text-[#85CDDB] shrink-0">
+                  <div key={item.id} className="flex items-center gap-4 p-3 bg-[color:var(--paper-2)] border-2 border-[color:var(--line)]">
+                    <div className="w-14 h-14 bg-[color:var(--paper)] border-2 border-[color:var(--line)] flex items-center justify-center text-[color:var(--teal)] shrink-0">
                       <IcFish size={24} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[#1C4F5A] truncate">{item.name}</p>
-                      <p className="text-xs text-[#7AACB8] mt-0.5">₱{item.price} {item.unit} × {item.qty}</p>
+                      <p className="text-sm font-bold text-[color:var(--ink)] truncate">{item.name}</p>
+                      <p className="text-xs font-mono text-[color:var(--muted)] mt-0.5">₱{item.price} {item.unit} × {item.qty}</p>
                     </div>
-                    <span className="font-['Russo_One'] text-base text-[#3899AE] shrink-0">₱{item.price * item.qty}</span>
+                    <span className="font-mono font-bold text-base text-[color:var(--ink)] shrink-0">₱{item.price * item.qty}</span>
                   </div>
                 ))}
                 <div className="mt-2 flex justify-end"><Btn label="Continue →" filled onClick={() => setStep(2)} /></div>
@@ -1082,46 +1231,46 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
 
           {step === 2 && (
             <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-[#3899AE] to-[#419DB2] px-6 py-4">
-                <h3 className="font-['Russo_One'] text-lg text-white">Delivery Information</h3>
-                <p className="text-xs text-[#DFF3F5]/80 mt-0.5">Where should we deliver your order?</p>
+              <div className="bg-[color:var(--teal)] border-b-2 border-[color:var(--line)] px-6 py-4">
+                <h3 className="font-display font-extrabold text-lg text-white uppercase tracking-tight">Delivery Information</h3>
+                <p className="text-xs font-mono text-white/85 mt-0.5">Where should we deliver your order?</p>
               </div>
               <div className="p-6 flex flex-col gap-4">
-              <div className="flex items-center gap-3 bg-[#F5FBFC] border border-[#B8E4EC] rounded-xl px-4 py-3">
-                <div className="w-8 h-8 bg-[#3899AE] rounded-lg flex items-center justify-center text-white shrink-0"><IcTruck size={16}/></div>
+              <div className="flex items-center gap-3 bg-[color:var(--aqua)] border-2 border-[color:var(--line)] px-4 py-3">
+                <div className="w-8 h-8 bg-[color:var(--ink)] flex items-center justify-center text-[color:var(--aqua)] shrink-0"><IcTruck size={16}/></div>
                 <div>
-                  <p className="text-xs font-semibold text-[#1C4F5A]">Delivered via Lalamove</p>
-                  <p className="text-[10px] text-[#7AACB8]">We book your rider once your order is confirmed.</p>
+                  <p className="text-xs font-bold text-[color:var(--ink)]">Delivered via Lalamove</p>
+                  <p className="text-[10px] font-mono text-[color:var(--ink)]/70">We book your rider once your order is confirmed.</p>
                 </div>
               </div>
                 <div className="flex gap-3 flex-col sm:flex-row">
-                  <div className="flex-1"><Label sub>First Name</Label><div className="mt-1"><FieldInput placeholder="Maria" /></div></div>
-                  <div className="flex-1"><Label sub>Last Name</Label><div className="mt-1"><FieldInput placeholder="Santos" /></div></div>
+                  <div className="flex-1"><Label>First Name</Label><div className="mt-1"><FieldInput placeholder="Maria" /></div></div>
+                  <div className="flex-1"><Label>Last Name</Label><div className="mt-1"><FieldInput placeholder="Santos" /></div></div>
                 </div>
-                <div><Label sub>Phone Number</Label><div className="mt-1"><FieldInput placeholder="09XX XXX XXXX" /></div></div>
-                <div><Label sub>Street Address</Label><div className="mt-1"><FieldInput placeholder="Block 5, Lot 12, Poblacion…" /></div></div>
+                <div><Label>Phone Number</Label><div className="mt-1"><FieldInput placeholder="09XX XXX XXXX" /></div></div>
+                <div><Label>Street Address</Label><div className="mt-1"><FieldInput placeholder="Block 5, Lot 12, Poblacion…" /></div></div>
                 <div className="flex gap-3 flex-col sm:flex-row">
-                  <div className="flex-1"><Label sub>Barangay</Label><div className="mt-1"><FieldInput placeholder="Salawag" /></div></div>
-                  <div className="flex-1"><Label sub>City</Label><div className="mt-1"><FieldInput placeholder="Dasmariñas" /></div></div>
+                  <div className="flex-1"><Label>Barangay</Label><div className="mt-1"><FieldInput placeholder="Salawag" /></div></div>
+                  <div className="flex-1"><Label>City</Label><div className="mt-1"><FieldInput placeholder="Dasmariñas" /></div></div>
                 </div>
                 <div>
-                  <Label sub>Courier</Label>
-                  <div className="mt-1 flex items-center gap-2 bg-[#DFF3F5] border border-[#B8E4EC] rounded-lg px-4 py-2.5">
+                  <Label>Courier</Label>
+                  <div className="mt-1 flex items-center gap-2 bg-[color:var(--paper-2)] border-2 border-[color:var(--line)] px-4 py-2.5">
                     <Tag label="Lalamove" />
-                    <span className="text-xs text-[#7AACB8]">Our team will book your delivery once your order is confirmed.</span>
+                    <span className="text-xs font-mono text-[color:var(--muted)]">Booked once your order is confirmed.</span>
                   </div>
                 </div>
                 <div>
-                  <Label sub>Preferred Delivery Time</Label>
+                  <Label>Preferred Delivery Time</Label>
                   <div className="flex gap-2 mt-1 flex-wrap">
                     {["6–8 AM","8–10 AM","10–12 PM"].map((t, i) => (
-                      <button key={t} className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-colors ${i === 0 ? "bg-[#3899AE] text-white border-[#3899AE]" : "bg-white border-[#B8E4EC] text-[#3A6B76] hover:border-[#3899AE]"}`}>{t}</button>
+                      <button key={t} className={`px-4 py-2 text-xs font-mono font-bold uppercase tracking-wide border-2 border-[color:var(--line)] transition-colors ${i === 0 ? "bg-[color:var(--ink)] text-[color:var(--paper)]" : "bg-[color:var(--paper)] text-[color:var(--ink)] hover:bg-[color:var(--aqua)]"}`}>{t}</button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <Label sub>Delivery Notes (Optional)</Label>
-                  <textarea className="mt-1 w-full border border-[#B8E4EC] rounded-lg px-4 py-2.5 text-sm text-[#1C4F5A] placeholder-[#7AACB8] outline-none focus:border-[#3899AE] resize-none h-16" placeholder="e.g. Please clean the fish" />
+                  <Label>Delivery Notes (Optional)</Label>
+                  <textarea className="mt-1 w-full border-2 border-[color:var(--line)] rounded-[var(--radius)] px-4 py-2.5 text-sm text-[color:var(--ink)] placeholder-[color:var(--muted)] outline-none focus:shadow-[3px_3px_0_var(--shadow-ink)] transition-shadow resize-none h-16" placeholder="e.g. Please clean the fish" />
                 </div>
               </div>
               <div className="flex gap-2 px-6 pb-6 justify-end flex-wrap">
@@ -1133,65 +1282,65 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
 
           {step === 3 && (
             <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-[#3899AE] to-[#419DB2] px-6 py-4">
-                <h3 className="font-['Russo_One'] text-lg text-white">Payment Method</h3>
-                <p className="text-xs text-[#DFF3F5]/80 mt-0.5">Choose how you want to pay</p>
+              <div className="bg-[color:var(--teal)] border-b-2 border-[color:var(--line)] px-6 py-4">
+                <h3 className="font-display font-extrabold text-lg text-white uppercase tracking-tight">Payment Method</h3>
+                <p className="text-xs font-mono text-white/85 mt-0.5">Choose how you want to pay</p>
               </div>
               <div className="p-6 flex flex-col gap-4">
                 <div className="flex flex-col gap-3">
                   <button onClick={() => { setMethod("GCash"); setPayError(false); }}
-                    className={`flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${method === "GCash" ? "border-[#3899AE] bg-gradient-to-r from-[#DFF3F5] to-white shadow-md" : "border-[#B8E4EC] bg-white hover:border-[#85CDDB] hover:shadow-sm"}`}>
-                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center shrink-0 transition-colors ${method === "GCash" ? "bg-[#3899AE] text-white" : "bg-[#DFF3F5] text-[#3899AE]"}`}>
+                    className={`flex items-center gap-4 p-4 border-2 border-[color:var(--line)] text-left transition-all duration-150 ${method === "GCash" ? "bg-[color:var(--aqua)] shadow-[4px_4px_0_var(--shadow-ink)]" : "bg-[color:var(--paper)] hover:bg-[color:var(--paper-2)]"}`}>
+                    <div className={`w-14 h-14 border-2 border-[color:var(--line)] flex items-center justify-center shrink-0 transition-colors ${method === "GCash" ? "bg-[color:var(--ink)] text-white" : "bg-[color:var(--paper-2)] text-[color:var(--ink)]"}`}>
                       <IcGcash size={26} />
                     </div>
                     <div className="flex-1">
-                      <p className="font-bold text-[#1C4F5A]">GCash</p>
-                      <p className="text-xs text-[#7AACB8] mt-0.5">Scan QR or send to our registered number</p>
+                      <p className="font-bold text-[color:var(--ink)]">GCash</p>
+                      <p className="text-xs font-mono text-[color:var(--muted)] mt-0.5">Scan QR or send to our registered number</p>
                     </div>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${method === "GCash" ? "border-[#3899AE] bg-[#3899AE]" : "border-[#B8E4EC]"}`}>
+                    <div className={`w-6 h-6 border-2 border-[color:var(--line)] flex items-center justify-center shrink-0 transition-all ${method === "GCash" ? "bg-[color:var(--coral)]" : "bg-[color:var(--paper)]"}`}>
                       {method === "GCash" && <IcCheckCircle size={14} className="text-white" />}
                     </div>
                   </button>
 
                   <button onClick={() => { setMethod("COD"); setPayError(false); }}
-                    className={`flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 ${method === "COD" ? "border-[#3899AE] bg-gradient-to-r from-[#DFF3F5] to-white shadow-md" : "border-[#B8E4EC] bg-white hover:border-[#85CDDB] hover:shadow-sm"}`}>
-                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center shrink-0 transition-colors ${method === "COD" ? "bg-[#3899AE] text-white" : "bg-[#DFF3F5] text-[#3899AE]"}`}>
+                    className={`flex items-center gap-4 p-4 border-2 border-[color:var(--line)] text-left transition-all duration-150 ${method === "COD" ? "bg-[color:var(--aqua)] shadow-[4px_4px_0_var(--shadow-ink)]" : "bg-[color:var(--paper)] hover:bg-[color:var(--paper-2)]"}`}>
+                    <div className={`w-14 h-14 border-2 border-[color:var(--line)] flex items-center justify-center shrink-0 transition-colors ${method === "COD" ? "bg-[color:var(--ink)] text-white" : "bg-[color:var(--paper-2)] text-[color:var(--ink)]"}`}>
                       <IcCash size={26} />
                     </div>
                     <div className="flex-1">
-                      <p className="font-bold text-[#1C4F5A]">Cash on Delivery</p>
-                      <p className="text-xs text-[#7AACB8] mt-0.5">Pay the Lalamove rider upon delivery</p>
+                      <p className="font-bold text-[color:var(--ink)]">Cash on Delivery</p>
+                      <p className="text-xs font-mono text-[color:var(--muted)] mt-0.5">Pay the Lalamove rider upon delivery</p>
                     </div>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${method === "COD" ? "border-[#3899AE] bg-[#3899AE]" : "border-[#B8E4EC]"}`}>
+                    <div className={`w-6 h-6 border-2 border-[color:var(--line)] flex items-center justify-center shrink-0 transition-all ${method === "COD" ? "bg-[color:var(--coral)]" : "bg-[color:var(--paper)]"}`}>
                       {method === "COD" && <IcCheckCircle size={14} className="text-white" />}
                     </div>
                   </button>
                 </div>
 
                 {method === "GCash" && (
-                  <div className="rounded-2xl overflow-hidden border border-[#B8E4EC]">
-                    <div className="bg-[#3899AE] px-4 py-2.5 flex items-center gap-2">
-                      <IcGcash size={14} className="text-white" />
-                      <span className="text-xs font-bold text-white tracking-wide uppercase">GCash Payment Details</span>
+                  <div className="overflow-hidden border-2 border-[color:var(--line)]">
+                    <div className="bg-[color:var(--ink)] px-4 py-2.5 flex items-center gap-2">
+                      <IcGcash size={14} className="text-[color:var(--aqua)]" />
+                      <span className="text-xs font-mono font-bold text-white tracking-wide uppercase">GCash Payment Details</span>
                     </div>
-                    <div className="p-4 bg-[#F5FBFC] flex flex-col md:flex-row gap-5 items-start">
-                      <div className="w-32 h-32 bg-white border-2 border-dashed border-[#B8E4EC] rounded-xl flex flex-col items-center justify-center gap-1 shrink-0">
-                        <IcGcash size={28} className="text-[#B8E4EC]" />
-                        <span className="text-[10px] text-[#B8E4EC] text-center font-medium">QR Placeholder</span>
+                    <div className="p-4 bg-[color:var(--paper-2)] flex flex-col md:flex-row gap-5 items-start">
+                      <div className="w-32 h-32 bg-[color:var(--paper)] border-2 border-dashed border-[color:var(--line)] flex flex-col items-center justify-center gap-1 shrink-0">
+                        <IcGcash size={28} className="text-[color:var(--muted)]" />
+                        <span className="text-[10px] font-mono text-[color:var(--muted)] text-center">QR Placeholder</span>
                       </div>
-                      <div className="flex flex-col gap-2.5 text-sm flex-1">
+                      <div className="flex flex-col gap-2.5 text-sm flex-1 font-mono">
                         {[
                           ["GCash Number", "0917-XXX-XXXX"],
                           ["Account Name", "Hook & Box"],
                           ["Amount to Send", `₱${total}`],
                         ].map(([k, v]) => (
-                          <div key={k} className="flex justify-between items-center py-1.5 border-b border-[#DFF3F5] last:border-0">
-                            <span className="text-[#7AACB8] text-xs">{k}</span>
-                            <span className={`font-bold ${k === "Amount to Send" ? "text-[#3899AE] text-base font-['Russo_One']" : "text-[#1C4F5A]"}`}>{v}</span>
+                          <div key={k} className="flex justify-between items-center py-1.5 border-b border-dashed border-[color:var(--line)]/30 last:border-0">
+                            <span className="text-[color:var(--muted)] text-xs">{k}</span>
+                            <span className={`font-bold ${k === "Amount to Send" ? "text-[color:var(--coral-ink)] text-base" : "text-[color:var(--ink)]"}`}>{v}</span>
                           </div>
                         ))}
-                        <div className="mt-1 border-2 border-dashed border-[#B8E4EC] rounded-xl p-3 bg-white text-center cursor-pointer hover:border-[#3899AE] transition-colors group">
-                          <p className="text-xs text-[#7AACB8] group-hover:text-[#3899AE] flex items-center justify-center gap-1.5 transition-colors">
+                        <div className="mt-1 border-2 border-dashed border-[color:var(--line)] p-3 bg-[color:var(--paper)] text-center cursor-pointer hover:bg-[color:var(--aqua)] transition-colors">
+                          <p className="text-xs text-[color:var(--ink)] flex items-center justify-center gap-1.5">
                             <IcUpload size={13} /> Upload proof of payment
                           </p>
                         </div>
@@ -1201,20 +1350,20 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
                 )}
 
                 {method === "COD" && (
-                  <div className="rounded-2xl overflow-hidden border border-[#B8E4EC]">
-                    <div className="bg-[#3899AE] px-4 py-2.5 flex items-center gap-2">
-                      <IcCash size={14} className="text-white" />
-                      <span className="text-xs font-bold text-white tracking-wide uppercase">Cash on Delivery</span>
+                  <div className="overflow-hidden border-2 border-[color:var(--line)]">
+                    <div className="bg-[color:var(--ink)] px-4 py-2.5 flex items-center gap-2">
+                      <IcCash size={14} className="text-[color:var(--aqua)]" />
+                      <span className="text-xs font-mono font-bold text-white tracking-wide uppercase">Cash on Delivery</span>
                     </div>
-                    <div className="p-5 bg-[#F5FBFC] flex items-start gap-4">
-                      <div className="w-12 h-12 bg-[#DFF3F5] rounded-xl flex items-center justify-center text-[#3899AE] shrink-0">
+                    <div className="p-5 bg-[color:var(--paper-2)] flex items-start gap-4">
+                      <div className="w-12 h-12 bg-[color:var(--paper)] border-2 border-[color:var(--line)] flex items-center justify-center text-[color:var(--ink)] shrink-0">
                         <IcCash size={22} />
                       </div>
                       <div>
-                        <p className="text-sm text-[#3A6B76] leading-relaxed">
-                          Prepare <strong className="text-[#3899AE] font-['Russo_One'] text-base">₱{total}</strong> in cash. Our Lalamove rider will collect payment upon delivery.
+                        <p className="text-sm text-[color:var(--ink)] leading-relaxed">
+                          Prepare <strong className="text-[color:var(--ink)] font-mono text-base">₱{total}</strong> in cash. Our Lalamove rider will collect payment upon delivery.
                         </p>
-                        <p className="text-xs text-[#7AACB8] mt-2 flex items-center gap-1.5">
+                        <p className="text-xs font-mono text-[color:var(--muted)] mt-2 flex items-center gap-1.5">
                           <IcPhone size={11} /> SMS confirmation sent once your order is dispatched.
                         </p>
                       </div>
@@ -1226,77 +1375,83 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
                   <Btn label="← Back" onClick={() => setStep(2)} />
                   <Btn label="Place Order →" filled onClick={() => { if (method) { setPayError(false); setStep(4); } else setPayError(true); }} />
                 </div>
-                {payError && <p className="text-xs text-red-500 text-right font-medium -mt-2">Please select a payment method to continue.</p>}
+                {payError && <p className="text-xs font-mono text-[color:var(--coral-ink)] text-right font-bold -mt-2">Please select a payment method to continue.</p>}
               </div>
             </Card>
           )}
 
           {step === 4 && (
-            <Card className="p-8 text-center overflow-hidden relative">
-              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#3899AE] via-[#9CEFE3] to-[#3899AE]" />
-              <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-[#9CEFE3]/20 blur-2xl pointer-events-none" />
-              <div className="w-20 h-20 bg-gradient-to-br from-[#DFF3F5] to-[#B8E4EC] rounded-full flex items-center justify-center mx-auto text-[#3899AE] mb-4 shadow-lg ring-4 ring-[#9CEFE3]/40">
+            <Card className="p-8 text-center overflow-hidden relative shadow-[5px_5px_0_var(--shadow-ink)]">
+              <div className="absolute top-0 left-0 right-0 h-2 bg-[color:var(--coral)] border-b-2 border-[color:var(--line)]" />
+              <div className="w-20 h-20 bg-[color:var(--aqua)] border-2 border-[color:var(--line)] flex items-center justify-center mx-auto text-[color:var(--ink)] mb-4 mt-3">
                 <IcCheckCircle size={42} />
               </div>
-              <h3 className="font-['Russo_One'] text-2xl shimmer-text">Order Placed!</h3>
-              <p className="text-sm text-[#7AACB8] mt-1">Your order <strong className="text-[#3899AE] font-mono">#HB-005</strong> has been received.</p>
+              <h3 className="font-display font-black text-2xl text-[color:var(--ink)] uppercase tracking-tight">Order Placed!</h3>
+              <p className="text-sm text-[color:var(--muted)] mt-1">Your order <strong className="text-[color:var(--coral-ink)] font-mono">#HB-005</strong> has been received.</p>
               <Divider />
               <div className="text-left">
                 <Label>Order Details</Label>
-                <div className="flex flex-col gap-2 mt-3 text-sm">
+                <div className="flex flex-col gap-2 mt-3 text-sm font-mono">
                   {[
-                    ["Order ID", <span key="v" className="font-mono font-bold text-[#3899AE]">#HB-005</span>],
+                    ["Order ID", <span key="v" className="font-bold text-[color:var(--teal)]">#HB-005</span>],
                     ["Payment", method || "COD"],
                     ["Courier", <Tag key="v" label="Lalamove" />],
                     ["Status", <Tag key="v" label="Pending Confirmation" />],
                     ["Est. Delivery", "Tomorrow, 6–8 AM"],
-                    ["Total Paid", <span key="v" className="font-['Russo_One'] text-[#3899AE]">₱{total}</span>],
+                    ["Total Paid", <span key="v" className="font-bold text-[color:var(--ink)]">₱{total}</span>],
                   ].map(([k, v], i) => (
-                    <div key={i} className="flex justify-between items-center py-1.5 border-b border-[#DFF3F5] last:border-0">
-                      <span className="text-[#7AACB8]">{k}</span>
-                      <span className="text-[#1C4F5A] font-medium">{v}</span>
+                    <div key={i} className="flex justify-between items-center py-1.5 border-b border-dashed border-[color:var(--line)]/25 last:border-0">
+                      <span className="text-[color:var(--muted)]">{k}</span>
+                      <span className="text-[color:var(--ink)] font-medium">{v}</span>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 bg-[#DFF3F5] border border-[#B8E4EC] rounded-xl p-3 flex items-start gap-2 text-xs text-[#7AACB8] leading-relaxed">
-                  <IcTruck size={14} className="text-[#3899AE] shrink-0 mt-0.5" />
+                <div className="mt-4 bg-[color:var(--paper-2)] border-2 border-[color:var(--line)] p-3 flex items-start gap-2 text-xs text-[color:var(--muted)] leading-relaxed">
+                  <IcTruck size={14} className="text-[color:var(--teal)] shrink-0 mt-0.5" />
                   Our team will book your Lalamove pickup once your order is confirmed. You will receive an SMS with delivery updates.
                 </div>
               </div>
               <Divider />
               <div className="flex gap-3 justify-center flex-wrap">
-                <button onClick={onTrack}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm bg-white border border-[#3899AE] text-[#3899AE] rounded-lg font-semibold hover:bg-[#DFF3F5] transition-colors">
-                  <IcSearch size={14} /> Track My Order
-                </button>
+                <Btn label="Track My Order" onClick={onTrack} />
                 <Btn label="Back to Shop" filled onClick={onBack} />
               </div>
             </Card>
           )}
+
+          <CheckoutNotes items={STEP_NOTES[step]} />
         </div>
 
-        {/* Price sidebar */}
-        <div className="w-full md:w-64 shrink-0">
-          <Card className="p-5 md:sticky md:top-4">
+        {/* Price sidebar — ~30% of the 70/30 split */}
+        <div className="w-full md:basis-[30%] md:min-w-0 shrink-0">
+          <Card className="p-5 md:sticky md:top-4 font-mono">
             <Label>Price Breakdown</Label>
             <Divider />
             {cart.map(item => (
-              <div key={item.id} className="flex justify-between text-xs text-[#3A6B76] mb-1.5">
+              <div key={item.id} className="flex justify-between text-xs text-[color:var(--ink)] mb-1.5">
                 <span className="truncate pr-2">{item.name} ×{item.qty}</span>
-                <span className="shrink-0 font-medium">₱{item.price * item.qty}</span>
+                <span className="shrink-0 font-bold">₱{item.price * item.qty}</span>
               </div>
             ))}
             <Divider />
-            <div className="flex justify-between text-xs text-[#7AACB8] mb-1.5"><span>Subtotal</span><span>₱{subtotal}</span></div>
-            <div className="flex justify-between text-xs text-[#7AACB8] mb-1.5">
+            <div className="flex justify-between text-xs text-[color:var(--muted)] mb-1.5"><span>Subtotal</span><span>₱{subtotal}</span></div>
+            <div className="flex justify-between text-xs text-[color:var(--muted)] mb-1.5">
               <span>Delivery (Lalamove)</span>
-              <span>{deliveryFee === 0 ? <span className="text-emerald-600 font-semibold">Free</span> : `₱${deliveryFee}`}</span>
+              <span>{deliveryFee === 0 ? <span className="text-[color:var(--teal)] font-bold">Free</span> : `₱${deliveryFee}`}</span>
             </div>
-            <div className="flex justify-between font-bold text-[#1C4F5A] text-base mt-3 pt-3 border-t border-[#B8E4EC]">
-              <span>Total</span><span className="text-[#3899AE] font-['Russo_One']">₱{total}</span>
+            <div className="flex justify-between font-bold text-[color:var(--ink)] text-base mt-3 pt-3 border-t-2 border-dashed border-[color:var(--line)]">
+              <span>Total</span><span className="text-[color:var(--ink)]">₱{total}</span>
             </div>
           </Card>
         </div>
+      </div>
+
+      {/* Understated brand finish so the page bottom reads as designed, not blank. */}
+      <div aria-hidden className="max-w-5xl mx-auto px-4 md:px-6 pb-8 -mt-2">
+        <svg viewBox="0 0 1200 40" preserveAspectRatio="none" className="w-full h-6 opacity-40">
+          <path d="M0 26 C 150 8, 300 8, 450 24 S 750 40, 900 22 S 1150 10, 1200 24" fill="none" stroke="var(--teal)" strokeWidth="2" />
+          <path d="M0 32 C 150 16, 300 16, 450 30 S 750 44, 900 28 S 1150 18, 1200 30" fill="none" stroke="var(--cyan)" strokeWidth="1.5" opacity="0.7" />
+        </svg>
       </div>
     </div>
   );
@@ -1323,52 +1478,43 @@ function TrackOrderView({ onBack }: { onBack: () => void }) {
   ];
 
   return (
-    <div className="h-full bg-[#DFF3F5] overflow-y-auto">
-      <div className="bg-white border-b border-[#B8E4EC] px-4 md:px-6 py-3.5 flex items-center gap-4 shadow-sm">
-        <button onClick={onBack} className="text-[#7AACB8] hover:text-[#3899AE] text-sm transition-colors flex items-center gap-1">
+    <div className="h-full bg-[color:var(--paper)] overflow-y-auto">
+      <div className="bg-[color:var(--paper)] border-b-2 border-[color:var(--line)] px-4 md:px-6 py-3.5 flex items-center gap-4">
+        <button onClick={onBack} className="text-[color:var(--ink)] hover:text-[color:var(--coral)] text-xs font-mono font-bold uppercase tracking-wide transition-colors flex items-center gap-1">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg> Back to Shop
         </button>
         <BrandLogo size="sm" />
       </div>
 
       {/* Teal hero with search */}
-      <div className="relative bg-gradient-to-br from-[#3899AE] to-[#2B7D90] overflow-hidden">
-        <div className="absolute top-2 right-6 w-28 h-28 rounded-full bg-white/5 blur-2xl pointer-events-none" />
-        <div className="px-4 md:px-8 pt-8 pb-12">
+      <div className="bg-[color:var(--teal)] border-b-2 border-[color:var(--line)]">
+        <div className="px-4 md:px-8 pt-8 pb-9">
           <div className="max-w-xl mx-auto">
-            <div className="flex items-center gap-2 mb-2">
-              <IcSearch size={16} className="text-[#9CEFE3]" />
-              <span className="text-[#9CEFE3] text-xs font-bold uppercase tracking-widest">Order Tracker</span>
-            </div>
-            <h2 className="font-['Russo_One'] text-3xl text-white mb-1">Track Your Order</h2>
-            <p className="text-[#DFF3F5]/80 text-sm mb-5">Enter your Order ID to see live status updates.</p>
+            <p className="eyebrow text-[color:var(--aqua)] mb-2">{"// Order Tracker"}</p>
+            <h2 className="font-display font-black text-4xl md:text-5xl text-white uppercase tracking-tight mb-2">Track Your Order</h2>
+            <p className="text-white/85 text-sm mb-5">Enter your Order ID to see live status updates.</p>
             <div className="flex gap-2">
               <input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && handleTrack()}
                 placeholder="#HB-001"
-                className="flex-1 bg-white/15 border border-white/30 rounded-xl px-4 py-3 text-sm text-white placeholder-white/50 outline-none focus:bg-white/20 focus:border-white/60 transition-all font-medium" />
+                className="flex-1 bg-[color:var(--paper)] border-2 border-[color:var(--line)] px-4 py-3 text-sm font-mono text-[color:var(--ink)] placeholder-[color:var(--muted)] outline-none transition-all" />
               <button onClick={handleTrack}
-                className="bg-white text-[#3899AE] font-bold text-sm px-5 py-3 rounded-xl hover:bg-[#DFF3F5] transition-colors shrink-0">
+                className="bg-[color:var(--coral)] text-white border-2 border-[color:var(--line)] shadow-[3px_3px_0_var(--shadow-ink)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none font-bold text-sm uppercase tracking-wide px-5 py-3 transition-all shrink-0">
                 Track →
               </button>
             </div>
-            <p className="text-white/40 text-[11px] mt-2">Try: #HB-001, #HB-002, #HB-003, or #HB-004</p>
+            <p className="text-white/60 text-[11px] font-mono mt-2">Try: #HB-001, #HB-002, #HB-003, or #HB-004</p>
           </div>
-        </div>
-        <div className="h-8 relative">
-          <svg viewBox="0 0 1440 32" preserveAspectRatio="none" className="absolute inset-0 w-full h-full" fill="#DFF3F5">
-            <path d="M0,16 C360,32 1080,0 1440,16 L1440,32 L0,32 Z" />
-          </svg>
         </div>
       </div>
 
       <div className="max-w-xl mx-auto px-4 pt-4 pb-10 flex flex-col gap-4">
         {result === "not-found" && (
-          <Card className="p-5 text-center overflow-hidden">
-            <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3 text-red-400">
+          <Card className="p-5 text-center overflow-hidden border-[color:var(--coral)]">
+            <div className="w-12 h-12 bg-[color:var(--coral)] border-2 border-[color:var(--line)] flex items-center justify-center mx-auto mb-3 text-white">
               <IcXCircle size={22} />
             </div>
-            <p className="text-sm font-bold text-red-500">Order not found</p>
-            <p className="text-xs text-red-400 mt-1">Double-check your Order ID and try again.</p>
+            <p className="text-sm font-bold text-[color:var(--coral-ink)] font-mono uppercase tracking-wide">Order not found</p>
+            <p className="text-xs text-[color:var(--muted)] mt-1">Double-check your Order ID and try again.</p>
           </Card>
         )}
 
@@ -1376,8 +1522,8 @@ function TrackOrderView({ onBack }: { onBack: () => void }) {
           <>
             {/* Status card */}
             <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-[#3899AE] to-[#419DB2] px-5 py-3 flex items-center justify-between">
-                <span className="text-xs font-bold text-white uppercase tracking-widest">Order Status</span>
+              <div className="bg-[color:var(--teal)] border-b-2 border-[color:var(--line)] px-5 py-3 flex items-center justify-between">
+                <span className="eyebrow text-white">Order Status</span>
                 <Tag label={result.status} color="white" />
               </div>
               <div className="px-5 pt-6 pb-5">
@@ -1385,22 +1531,17 @@ function TrackOrderView({ onBack }: { onBack: () => void }) {
                   {STATUS_STEPS.map((s, i) => (
                     <div key={s} className="flex items-center flex-1 min-w-0">
                       <div className="flex flex-col items-center gap-2 flex-1">
-                        <div className="relative flex items-center justify-center">
-                          {i === stepIndex && (
-                            <span className="absolute w-11 h-11 rounded-full border-2 border-[#3899AE] animate-ping-slow" />
-                          )}
-                          <div className={`w-11 h-11 rounded-full flex items-center justify-center border-2 shrink-0 transition-all duration-300 relative ${
-                            i < stepIndex ? "bg-[#3899AE] border-[#3899AE] text-white shadow-lg"
-                            : i === stepIndex ? "bg-white border-[#3899AE] text-[#3899AE] shadow-md"
-                            : "bg-white border-[#B8E4EC] text-[#B8E4EC]"
-                          }`}>
-                            {i < stepIndex ? <IcCheckCircle size={18}/> : STATUS_ICONS[i]}
-                          </div>
+                        <div className={`w-11 h-11 flex items-center justify-center border-2 border-[color:var(--line)] shrink-0 transition-all duration-200 ${
+                          i < stepIndex ? "bg-[color:var(--teal)] text-white"
+                          : i === stepIndex ? "bg-[color:var(--coral)] text-white shadow-[3px_3px_0_var(--shadow-ink)]"
+                          : "bg-[color:var(--paper)] text-[color:var(--muted)]"
+                        }`}>
+                          {i < stepIndex ? <IcCheckCircle size={18}/> : STATUS_ICONS[i]}
                         </div>
-                        <span className={`text-[10px] text-center whitespace-nowrap font-semibold px-0.5 ${i <= stepIndex ? "text-[#3899AE]" : "text-[#B8E4EC]"}`}>{s}</span>
+                        <span className={`text-[10px] text-center whitespace-nowrap font-mono font-bold uppercase tracking-wide px-0.5 ${i <= stepIndex ? "text-[color:var(--ink)]" : "text-[color:var(--muted)]"}`}>{s}</span>
                       </div>
                       {i < STATUS_STEPS.length - 1 && (
-                        <div className={`h-0.5 w-4 md:w-5 mb-6 rounded-full shrink-0 transition-all duration-500 ${i < stepIndex ? "bg-gradient-to-r from-[#3899AE] to-[#85CDDB]" : "bg-[#B8E4EC]"}`} />
+                        <div className={`h-0.5 w-4 md:w-5 mb-6 shrink-0 transition-all duration-300 ${i < stepIndex ? "bg-[color:var(--teal)]" : "bg-[color:var(--ink)]/25"}`} />
                       )}
                     </div>
                   ))}
@@ -1410,34 +1551,34 @@ function TrackOrderView({ onBack }: { onBack: () => void }) {
 
             {/* Order details card */}
             <Card className="overflow-hidden">
-              <div className="bg-gradient-to-r from-[#3899AE] to-[#419DB2] px-5 py-3">
-                <span className="text-xs font-bold text-white uppercase tracking-widest">Order Details</span>
+              <div className="bg-[color:var(--teal)] border-b-2 border-[color:var(--line)] px-5 py-3">
+                <span className="eyebrow text-white">Order Details</span>
               </div>
-              <div className="p-5 flex flex-col gap-0">
+              <div className="p-5 flex flex-col gap-0 font-mono">
                 {([
-                  { icon: <IcDoc size={13}/>, label: "Order ID", value: <span className="font-mono font-bold text-[#3899AE]">{result.id}</span> },
+                  { icon: <IcDoc size={13}/>, label: "Order ID", value: <span className="font-bold text-[color:var(--teal)]">{result.id}</span> },
                   { icon: <IcUsers size={13}/>, label: "Customer", value: result.customer },
                   { icon: <IcFish size={13}/>, label: "Items", value: <span className="text-right text-xs leading-snug max-w-[160px]">{result.items}</span> },
                   { icon: <IcClock size={13}/>, label: "Date Placed", value: result.date },
                   { icon: <IcCard size={13}/>, label: "Payment", value: result.payment },
                   { icon: <IcTruck size={13}/>, label: "Courier", value: <Tag label="Lalamove" /> },
                   { icon: <IcCheckCircle size={13}/>, label: "Status", value: <Tag label={result.status} color={result.status === "Delivered" ? "muted" : "accent"} /> },
-                  { icon: <IcPeso size={13}/>, label: "Total", value: <span className="font-['Russo_One'] text-[#3899AE]">₱{result.total}</span> },
+                  { icon: <IcPeso size={13}/>, label: "Total", value: <span className="font-bold text-[color:var(--ink)]">₱{result.total}</span> },
                 ] as const).map((row, i) => (
-                  <div key={i} className="flex justify-between items-center py-2.5 border-b border-[#DFF3F5] last:border-0 text-sm">
-                    <span className="flex items-center gap-2 text-[#7AACB8]">
-                      <span className="text-[#B8E4EC]">{row.icon}</span>{row.label}
+                  <div key={i} className="flex justify-between items-center py-2.5 border-b border-dashed border-[color:var(--line)]/25 last:border-0 text-sm">
+                    <span className="flex items-center gap-2 text-[color:var(--muted)]">
+                      <span className="text-[color:var(--teal)]">{row.icon}</span>{row.label}
                     </span>
-                    <span className="text-[#1C4F5A] font-medium text-right">{row.value}</span>
+                    <span className="text-[color:var(--ink)] font-medium text-right">{row.value}</span>
                   </div>
                 ))}
               </div>
               <div className="px-5 pb-5">
                 <button disabled
-                  className="w-full border-2 border-dashed border-[#B8E4EC] rounded-xl bg-[#F5FBFC] text-[#7AACB8] text-sm py-3 cursor-not-allowed flex items-center justify-center gap-2 font-medium">
-                  <IcTruck size={15}/> View on Lalamove — Available in Full Version
+                  className="w-full border-2 border-dashed border-[color:var(--line)] bg-[color:var(--paper-2)] text-[color:var(--muted)] text-xs font-mono font-bold uppercase tracking-wide py-3 cursor-not-allowed flex items-center justify-center gap-2">
+                  <IcTruck size={15}/> View on Lalamove — Full Version
                 </button>
-                <p className="text-[10px] text-[#7AACB8] text-center mt-1.5">
+                <p className="text-[10px] font-mono text-[color:var(--muted)] text-center mt-1.5">
                   {stepIndex >= 2 ? "Live tracking will be linked here once dispatched." : "Available once your order is out for delivery."}
                 </p>
               </div>
@@ -1453,26 +1594,26 @@ function TrackOrderView({ onBack }: { onBack: () => void }) {
 
 function AboutView({ onBack }: { onBack: () => void }) {
   return (
-    <div className="h-full bg-[#DFF3F5] overflow-y-auto">
-      <div className="bg-white border-b border-[#B8E4EC] px-4 md:px-6 py-3.5 flex items-center gap-4 shadow-sm">
-        <button onClick={onBack} className="text-[#7AACB8] hover:text-[#3899AE] text-sm transition-colors">← Back to Shop</button>
+    <div className="h-full bg-[color:var(--paper)] overflow-y-auto">
+      <div className="bg-[color:var(--paper)] border-b-2 border-[color:var(--line)] px-4 md:px-6 py-3.5 flex items-center gap-4">
+        <button onClick={onBack} className="text-[color:var(--ink)] hover:text-[color:var(--coral)] text-xs font-mono font-bold uppercase tracking-wide transition-colors">← Back to Shop</button>
         <BrandLogo size="sm" />
-        <span className="text-sm text-[#7AACB8] font-medium">About Us</span>
+        <span className="eyebrow text-[color:var(--muted)]">{"// About Us"}</span>
       </div>
 
       {/* Logo splash banner */}
-      <div className="h-52 overflow-hidden relative">
+      <div className="h-52 overflow-hidden relative border-b-2 border-[color:var(--line)]">
         <img src={frame15Logo} alt="Hook & Box" className="w-full h-full object-cover object-center" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1C4F5A]/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[color:var(--ink)]/50 to-transparent" />
         <div className="absolute bottom-4 left-0 right-0 text-center">
-          <span className="text-white/70 text-xs font-medium tracking-[0.25em] uppercase">Fresh · Fast · Fuss-free</span>
+          <span className="text-white font-mono text-xs font-bold tracking-[0.25em] uppercase">Fresh · Fast · Fuss-free</span>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-10 flex flex-col gap-6 -mt-6">
+      <div className="max-w-2xl mx-auto px-4 py-10 flex flex-col gap-6">
         <Card className="p-8 text-center">
-          <img src={frame19Logo} alt="Hook & Box" className="h-16 w-auto mx-auto object-contain rounded-xl mb-3" />
-          <p className="text-sm text-[#3A6B76] mt-1 max-w-sm mx-auto leading-relaxed">
+          <img src={frame19Logo} alt="Hook & Box" className="h-16 w-auto mx-auto object-contain mb-3" />
+          <p className="text-sm text-[color:var(--ink)] mt-1 max-w-sm mx-auto leading-relaxed">
             Fresh seafood, delivered to your door in Dasmariñas.
           </p>
           <div className="mt-3"><Tag label="Est. 2026" /></div>
@@ -1480,13 +1621,13 @@ function AboutView({ onBack }: { onBack: () => void }) {
 
         <Card className="overflow-hidden">
           <div className="flex">
-            <div className="w-1.5 bg-gradient-to-b from-[#3899AE] to-[#9CEFE3] shrink-0 rounded-l-2xl" />
+            <div className="w-2 bg-[color:var(--coral)] border-r-2 border-[color:var(--line)] shrink-0" />
             <div className="p-6 flex-1">
-              <h3 className="font-['Russo_One'] text-lg text-[#1C4F5A] mb-3">Our Story</h3>
-              <p className="text-sm text-[#3A6B76] leading-relaxed">
+              <h3 className="font-display font-extrabold text-xl text-[color:var(--ink)] uppercase tracking-tight mb-3">Our Story</h3>
+              <p className="text-sm text-[color:var(--muted)] leading-relaxed">
                 Hook & Box started with five friends who shared one frustration — why spend time, gas, and effort going to the wet market when fresh seafood should come to you? We built this service to make quality seafood accessible to every household in Dasmariñas, without the hassle.
               </p>
-              <p className="text-sm text-[#3A6B76] leading-relaxed mt-3">
+              <p className="text-sm text-[color:var(--muted)] leading-relaxed mt-3">
                 We source our catch fresh every morning and deliver straight to your door via Lalamove — so you get the best seafood without leaving home.
               </p>
             </div>
@@ -1500,41 +1641,38 @@ function AboutView({ onBack }: { onBack: () => void }) {
             { icon: <IcUsers size={22}/>, label: "Community", sub: "Built for Dasma" },
             { icon: <IcTruck size={22}/>, label: "Reliability", sub: "Via Lalamove" },
           ].map(v => (
-            <Card key={v.label} className="p-4 flex flex-col items-center text-center gap-2 hover:shadow-md transition-shadow">
-              <div className="w-10 h-10 bg-gradient-to-br from-[#DFF3F5] to-[#B8E4EC] rounded-xl flex items-center justify-center text-[#3899AE]">{v.icon}</div>
-              <p className="text-xs font-bold text-[#1C4F5A]">{v.label}</p>
-              <p className="text-[10px] text-[#7AACB8]">{v.sub}</p>
+            <Card key={v.label} className="p-4 flex flex-col items-center text-center gap-2">
+              <div className="w-10 h-10 bg-[color:var(--aqua)] border-2 border-[color:var(--line)] flex items-center justify-center text-[color:var(--ink)]">{v.icon}</div>
+              <p className="text-xs font-bold text-[color:var(--ink)]">{v.label}</p>
+              <p className="text-[10px] font-mono text-[color:var(--muted)]">{v.sub}</p>
             </Card>
           ))}
         </div>
 
-        <Card className="p-6 bg-gradient-to-br from-white to-[#F5FBFC]">
-          <div className="flex items-baseline gap-3 mb-1">
-            <h3 className="font-['Russo_One'] text-lg text-[#1C4F5A]">Meet the Team</h3>
-            <span className="text-sm font-bold tracking-widest text-[#9CEFE3]">PICKE</span>
+        <Card className="p-6">
+          <div className="flex items-baseline gap-3 mb-1 flex-wrap">
+            <h3 className="font-display font-extrabold text-xl text-[color:var(--ink)] uppercase tracking-tight">Meet the Team</h3>
+            <span className="eyebrow text-[color:var(--coral-ink)]">{"// PICKE"}</span>
           </div>
           <Divider />
           <div className="flex gap-3 overflow-x-auto pb-2">
             {TEAM.map((member) => (
-              <div key={member.name} className="flex flex-col items-center gap-2.5 min-w-[90px] flex-1 group">
-                <div className={`w-16 h-16 bg-gradient-to-br ${member.grad} rounded-2xl flex items-center justify-center text-white font-['Russo_One'] text-xl shadow-lg ring-2 ring-white ring-offset-2 group-hover:scale-110 group-hover:shadow-xl transition-all duration-200`}>
+              <div key={member.name} className="flex flex-col items-center gap-2.5 min-w-[90px] flex-1">
+                <div className="w-16 h-16 bg-[color:var(--teal)] border-2 border-[color:var(--line)] shadow-[3px_3px_0_var(--shadow-ink)] flex items-center justify-center text-white font-display font-black text-xl">
                   {member.initial}
                 </div>
-                <p className="text-sm font-semibold text-[#1C4F5A] text-center">{member.name}</p>
-                <p className="text-[10px] text-[#7AACB8] text-center leading-tight">{member.role}</p>
+                <p className="text-sm font-bold text-[color:var(--ink)] text-center">{member.name}</p>
+                <p className="text-[10px] font-mono text-[color:var(--muted)] text-center leading-tight">{member.role}</p>
               </div>
             ))}
           </div>
         </Card>
 
         <div className="flex justify-center">
-          <div className="relative border-2 border-[#3899AE] px-14 py-7 text-center rounded-2xl overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#DFF3F5] to-[#EAF8FA] -z-10" />
-            <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-[#9CEFE3]/30" />
-            <div className="absolute -bottom-3 -left-3 w-10 h-10 rounded-full bg-[#3899AE]/10" />
-            <p className="text-[10px] text-[#7AACB8] uppercase tracking-[0.3em] font-medium">Established</p>
-            <p className="font-['Russo_One'] text-6xl text-[#3899AE] leading-none mt-1 drop-shadow-sm">2026</p>
-            <p className="text-[10px] text-[#7AACB8] uppercase tracking-[0.3em] font-medium mt-2">Dasmariñas City</p>
+          <div className="border-2 border-[color:var(--line)] bg-[color:var(--aqua)] shadow-[5px_5px_0_var(--shadow-ink)] px-14 py-7 text-center">
+            <p className="text-[10px] font-mono text-[color:var(--ink)]/70 uppercase tracking-[0.3em] font-bold">Established</p>
+            <p className="font-display font-black text-6xl text-[color:var(--ink)] leading-none mt-1">2026</p>
+            <p className="text-[10px] font-mono text-[color:var(--ink)]/70 uppercase tracking-[0.3em] font-bold mt-2">Dasmariñas City</p>
           </div>
         </div>
       </div>
@@ -1546,73 +1684,64 @@ function AboutView({ onBack }: { onBack: () => void }) {
 
 function ContactView({ onBack }: { onBack: () => void }) {
   return (
-    <div className="h-full bg-[#DFF3F5] overflow-y-auto">
-      <div className="bg-white border-b border-[#B8E4EC] px-4 md:px-6 py-3.5 flex items-center gap-4 shadow-sm">
-        <button onClick={onBack} className="text-[#7AACB8] hover:text-[#3899AE] text-sm transition-colors flex items-center gap-1">
+    <div className="h-full bg-[color:var(--paper)] overflow-y-auto">
+      <div className="bg-[color:var(--paper)] border-b-2 border-[color:var(--line)] px-4 md:px-6 py-3.5 flex items-center gap-4">
+        <button onClick={onBack} className="text-[color:var(--ink)] hover:text-[color:var(--coral)] text-xs font-mono font-bold uppercase tracking-wide transition-colors flex items-center gap-1">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg> Back to Shop
         </button>
         <BrandLogo size="sm" />
       </div>
 
       {/* Teal hero */}
-      <div className="relative bg-gradient-to-br from-[#3899AE] to-[#2B7D90] overflow-hidden">
-        <div className="absolute top-0 right-0 w-40 h-40 rounded-full bg-white/5 blur-3xl pointer-events-none" />
-        <div className="px-4 md:px-8 pt-8 pb-12 text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <IcPhone size={14} className="text-[#9CEFE3]" />
-            <span className="text-[#9CEFE3] text-xs font-bold uppercase tracking-widest">Get in Touch</span>
-          </div>
-          <h2 className="font-['Russo_One'] text-3xl text-white mb-1">We&rsquo;d Love to Hear<br />From You</h2>
-          <p className="text-[#DFF3F5]/80 text-sm max-w-sm mx-auto mt-2">Have a question, a special order, or just want to say hi? Reach out to us through any of the channels below.</p>
-        </div>
-        <div className="h-8 relative">
-          <svg viewBox="0 0 1440 32" preserveAspectRatio="none" className="absolute inset-0 w-full h-full" fill="#DFF3F5">
-            <path d="M0,16 C360,32 1080,0 1440,16 L1440,32 L0,32 Z" />
-          </svg>
+      <div className="bg-[color:var(--teal)] border-b-2 border-[color:var(--line)]">
+        <div className="px-4 md:px-8 pt-8 pb-9 text-center">
+          <p className="eyebrow text-[color:var(--aqua)] mb-2">{"// Get in Touch"}</p>
+          <h2 className="font-display font-black text-4xl md:text-5xl text-white uppercase tracking-tight mb-1">We&rsquo;d Love to<br />Hear From You</h2>
+          <p className="text-white/85 text-sm max-w-sm mx-auto mt-3">Have a question, a special order, or just want to say hi? Reach out through any of the channels below.</p>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 pb-10">
+      <div className="max-w-2xl mx-auto px-4 pt-8 pb-10">
         <div className="flex flex-col md:flex-row gap-5">
           {/* Contact info */}
           <div className="flex-1 flex flex-col gap-3">
             {[
               {
                 icon: <IcFacebook size={20}/>,
-                iconBg: "bg-[#3899AE]",
+                iconBg: "bg-[color:var(--teal)] text-white",
                 label: "Facebook Page",
                 value: "fb.com/hookandbox",
-                action: <button className="mt-2 flex items-center gap-1.5 text-xs font-bold text-[#3899AE] hover:underline"><IcFacebook size={11}/> Visit Page →</button>,
+                action: <button className="mt-2 flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--coral-ink)] hover:underline"><IcFacebook size={11}/> Visit Page →</button>,
               },
               {
                 icon: <IcPhone size={20}/>,
-                iconBg: "bg-[#419DB2]",
+                iconBg: "bg-[color:var(--coral)] text-white",
                 label: "Phone / SMS",
                 value: "0917-XXX-XXXX",
                 action: null,
               },
               {
                 icon: <IcClock size={20}/>,
-                iconBg: "bg-[#85CDDB]",
+                iconBg: "bg-[color:var(--plum)] text-white",
                 label: "Operating Hours",
                 value: "Mon – Sat · 7:00 AM – 9:00 PM",
                 action: null,
               },
               {
                 icon: <IcTruck size={20}/>,
-                iconBg: "bg-[#9CEFE3] !text-[#1C4F5A]",
+                iconBg: "bg-[color:var(--aqua)] text-[color:var(--ink)]",
                 label: "Service Area",
                 value: "Dasmariñas City only",
                 action: null,
               },
             ].map(item => (
-              <Card key={item.label} className="p-4 flex items-start gap-4 hover:shadow-md transition-shadow">
-                <div className={`w-11 h-11 ${item.iconBg} rounded-xl flex items-center justify-center text-white shrink-0`}>
+              <Card key={item.label} className="p-4 flex items-start gap-4">
+                <div className={`w-11 h-11 ${item.iconBg} border-2 border-[color:var(--line)] flex items-center justify-center shrink-0`}>
                   {item.icon}
                 </div>
                 <div className="flex-1">
-                  <p className="text-[10px] font-bold text-[#7AACB8] uppercase tracking-wider">{item.label}</p>
-                  <p className="text-sm font-semibold text-[#1C4F5A] mt-0.5">{item.value}</p>
+                  <p className="text-[10px] font-mono font-bold text-[color:var(--muted)] uppercase tracking-wider">{item.label}</p>
+                  <p className="text-sm font-bold text-[color:var(--ink)] mt-0.5">{item.value}</p>
                   {item.action}
                 </div>
               </Card>
@@ -1621,16 +1750,16 @@ function ContactView({ onBack }: { onBack: () => void }) {
 
           {/* Message form */}
           <Card className="flex-1 overflow-hidden">
-            <div className="bg-gradient-to-r from-[#3899AE] to-[#419DB2] px-6 py-4">
-              <h3 className="font-['Russo_One'] text-lg text-white">Send a Message</h3>
-              <p className="text-xs text-[#DFF3F5]/80 mt-0.5">We reply within 24 hours</p>
+            <div className="bg-[color:var(--teal)] border-b-2 border-[color:var(--line)] px-6 py-4">
+              <h3 className="font-display font-extrabold text-lg text-white uppercase tracking-tight">Send a Message</h3>
+              <p className="text-xs font-mono text-white/85 mt-0.5">We reply within 24 hours</p>
             </div>
             <div className="p-6 flex flex-col gap-4">
-              <div><Label sub>Name</Label><div className="mt-1"><FieldInput placeholder="Your name" /></div></div>
-              <div><Label sub>Phone Number</Label><div className="mt-1"><FieldInput placeholder="09XX XXX XXXX" /></div></div>
+              <div><Label>Name</Label><div className="mt-1"><FieldInput placeholder="Your name" /></div></div>
+              <div><Label>Phone Number</Label><div className="mt-1"><FieldInput placeholder="09XX XXX XXXX" /></div></div>
               <div>
-                <Label sub>Message</Label>
-                <textarea className="mt-1 w-full border border-[#B8E4EC] rounded-xl px-4 py-3 text-sm text-[#1C4F5A] placeholder-[#7AACB8] outline-none focus:border-[#3899AE] resize-none h-28 transition-colors bg-white" placeholder="Type your message here…" />
+                <Label>Message</Label>
+                <textarea className="mt-1 w-full border-2 border-[color:var(--line)] rounded-[var(--radius)] px-4 py-3 text-sm text-[color:var(--ink)] placeholder-[color:var(--muted)] outline-none focus:shadow-[3px_3px_0_var(--shadow-ink)] resize-none h-28 transition-shadow bg-white" placeholder="Type your message here…" />
               </div>
               <Btn label="Send Message →" filled full />
             </div>
@@ -1683,17 +1812,17 @@ export default function StoreApp({ products, categories }: {
   return (
     <div className="size-full flex flex-col overflow-hidden">
       {/* Demo navigation bar */}
-      <div className="flex items-center bg-[#1C4F5A] shrink-0 overflow-x-auto">
-        <span className="text-[10px] text-[#7AACB8] px-4 py-2 font-semibold uppercase tracking-widest whitespace-nowrap hidden lg:block">
+      <div className="flex items-center bg-[color:var(--ink)] shrink-0 overflow-x-auto border-b-2 border-[color:var(--line)]">
+        <span className="text-[10px] text-[color:var(--aqua)] px-4 py-2 font-mono font-bold uppercase tracking-widest whitespace-nowrap hidden lg:block">
           Hook & Box — Prototype
         </span>
         {NAV_VIEWS.map(([v, label]) => (
           <button key={v} onClick={() => setView(v)}
-            className={`px-4 py-2.5 text-xs font-semibold border-r border-[#ffffff10] whitespace-nowrap transition-colors flex items-center gap-1.5 ${view === v ? "bg-[#3899AE] text-white" : "text-[#85CDDB] hover:text-white hover:bg-white/5"}`}>
+            className={`px-4 py-2.5 text-xs font-mono font-bold uppercase tracking-wide border-r border-white/10 whitespace-nowrap transition-colors flex items-center gap-1.5 ${view === v ? "bg-[color:var(--coral)] text-white" : "text-[color:var(--aqua)] hover:text-white hover:bg-white/5"}`}>
             {NAV_ICON[v]}{label}
           </button>
         ))}
-        <span className="ml-auto text-[10px] text-[#3A6B76] px-4 whitespace-nowrap hidden md:block">Demo Mode</span>
+        <span className="ml-auto text-[10px] font-mono text-[color:var(--muted)] px-4 whitespace-nowrap hidden md:block">Demo Mode</span>
       </div>
 
       <div className="flex-1 overflow-hidden">

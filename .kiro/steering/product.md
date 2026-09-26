@@ -1,6 +1,10 @@
 ---
-inclusion: always
+inclusion: manual
 ---
+
+<!-- Not always-on: the same product facts already load every turn via AGENTS.md
+     (the single source of truth). Pull this in with #product for the fuller
+     breakdown. Keeping it manual avoids paying for duplicated context each turn. -->
 
 # Product: Hook & Box
 

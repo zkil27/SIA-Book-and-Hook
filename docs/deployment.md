@@ -78,7 +78,7 @@ console output alone has burned people.
 4. Deploy. Open the live URL. Confirm it renders real rows from the database,
    not just a page that builds.
 
-## 5. Keep-alive cron
+## 5. Keep-alive cron & Offline Resilience
 
 Supabase pauses free projects after about 7 days of low database activity. During
 the sprint you'll be querying constantly, so it's not a risk now — it's a risk
@@ -86,7 +86,18 @@ over a semester break, when you return to a final defense and find the project
 offline. Data survives, but it needs a manual restore from the dashboard, which
 is not a thing to discover an hour before a panel.
 
-Set it up now:
+If a project is paused:
+1. Open the [Supabase Dashboard](https://supabase.com/dashboard) and navigate to the project.
+2. Click **"Restore project"** / **"Unpause project"**.
+3. Allow 1-2 minutes for the database instance and pooler routes to re-establish.
+
+To ensure the storefront never crashes with an unhandled `PrismaClientInitializationError`
+during presentations or local development if Supabase happens to be paused or unreachable,
+`lib/products.ts` catches database initialization/network failures and automatically falls
+back to the static seeded catalog (`lib/fallback-catalog.ts`), logging a console warning
+while serving the full storefront UI seamlessly.
+
+Set up the keep-alive cron for production:
 
 1. An API route, e.g. `app/api/keep-alive/route.ts`, running one trivial query
    through Prisma.

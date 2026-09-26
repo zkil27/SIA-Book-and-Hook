@@ -140,7 +140,13 @@ Set both locally (`.env.local`) and in Vercel for all environments.
 ## Verification gate (tool-agnostic — applies to every tool and teammate)
 
 `npm run verify` runs `typecheck && lint && footguns` and must pass before a
-commit. It is enforced universally — not tied to any one editor:
+commit. It is enforced universally — not tied to any one editor.
+
+**Run it exactly once, at the very end of a task — mandatory.** Batch every edit
+first, then verify a single time as the last step. Never verify mid-task, after
+each file, after each sub-task, or "to be sure" — a green run is final. Running
+the gate (or `tsc --noEmit`/`lint`/`footguns` individually) repeatedly through a
+task is wasted cost and is not allowed here.
 
 - **`npm run footguns`** (`scripts/check-footguns.ts`) statically scans source
   for the non-negotiables that written rules alone can't enforce: a stray
@@ -178,6 +184,35 @@ Adding a new project-wide "never do this" rule? Encode it as a rule in
    (missing) and defers role checks to pages; a CUSTOMER is not yet actually
    rejected from `/admin`, which the scope requires.
 5. **No keep-alive cron** — Supabase pauses free projects after ~7 idle days.
+
+## Token / credit efficiency (how agents should work here)
+
+Context is money on this project. Default to the cheapest path that still gets
+the task right. Correctness first, but don't burn tokens re-deriving what you
+already have.
+
+- **Don't re-read or re-search what's already in context.** The steering/rules
+  (this file included) already give you the stack, scope, data model, and known
+  gaps — don't open files to reconfirm facts stated here.
+- **Batch independent reads/searches into one turn** instead of one-at-a-time
+  round trips. Read the specific files you need, not whole directories.
+- **Search narrow.** Prefer a targeted grep/glob with an `includePattern` over
+  reading large files; read only the line ranges you need.
+- **Prefer targeted edits over full-file rewrites.** Use string-replace edits;
+  never rewrite `app/StoreApp.tsx` (or any large file) wholesale to change a few
+  lines.
+- **Delegate big investigations to a sub-agent** (context-gatherer) so the
+  exploration cost stays out of the main thread; then act on its summary.
+- **Verify exactly once, at the very end (mandatory).** Run `npm run verify`
+  (or its individual steps) a single time, after ALL edits for the task are
+  done — never mid-task, never after each file or micro-edit, never to "be
+  sure". If a green run comes back, trust it and stop; do not re-run. Batch all
+  changes first, verify last. This is a hard rule, not a preference.
+- **Pull heavy context on demand, not always.** Deep references live behind
+  `#deployment`, `#product`, `#tech`, `#structure` and the `.kiro/skills/`
+  files — load them only for the task at hand.
+- **Keep answers proportional.** Short questions get short answers; don't
+  restate these rules or the project brief back to the user.
 
 ## Repo conventions
 
