@@ -171,6 +171,21 @@ You don't need to code these, just recognize the names:
 - **Tailwind CSS** — the styling system that makes it look nice.
 - **Vercel** — the service that hosts our live website.
 
+### What the site looks like (the visual style)
+
+The UI is styled to match the **Hook & Box logo**: a saturated teal/cyan brand
+identity with a light mint fill, on a cool mint-tinted "paper" canvas. Structure
+comes from rounded surfaces, hairline outlines, and soft diffuse shadows, with
+big bold headlines and a monospace typeface for anything numeric — prices, order
+IDs, stock counts, and especially the stock ledger. The brand is carried by
+teal/cyan/mint; a single warm accent (a coral/orange complement) is reserved for
+the primary buttons and true alerts only, so it pops against the cool field.
+Money and prices read as neutral deep-teal mono data, not as buttons. The design
+tokens (colors, fonts, borders) are defined once in `app/globals.css` and reused
+everywhere, so the whole app stays consistent. If asked "why does it look like
+that?": the palette echoes the logo, and the monospace numerics tie into the
+stock ledger, our star feature.
+
 ### Why two database "addresses"?
 
 A common gotcha worth knowing: our database has **two connection links**. One
@@ -207,9 +222,11 @@ The full script is in `docs/demo-runbook.md`. The short version:
 2. **Log in as admin.** *"Access is role-based — staff only."*
 3. **Create or edit a product,** then show it change on the storefront.
    *"Prices are whole-number centavos, so no rounding errors."*
-4. **Adjust stock with a reason, then open the stock history.** This is the star
-   moment — show the ledger. *"Every change is recorded with a reason and time;
-   we correct mistakes by adding a line, never editing one."*
+4. **Adjust stock with a reason, then open the stock history (the Ledger tab).**
+   This is the star moment — show the ledger, styled like a **receipt tape** with
+   additions in teal and removals in coral and a running balance. *"Every change
+   is recorded with a reason and time; we correct mistakes by adding a line,
+   never editing one."*
 5. **Show the `docs/` folder** — scope, diagrams, requirements.
 6. **Close:** state what's built, what's next, and what's intentionally left out.
 

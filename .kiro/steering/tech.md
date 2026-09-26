@@ -1,6 +1,10 @@
 ---
-inclusion: always
+inclusion: manual
 ---
+
+<!-- Not always-on: the tech stack + non-negotiables already load every turn via
+     AGENTS.md (the single source of truth). Pull this in with #tech for the
+     fuller gotchas. Keeping it manual avoids duplicated per-turn context. -->
 
 # Tech Stack & Critical Gotchas
 

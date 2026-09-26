@@ -1,6 +1,12 @@
 ---
-inclusion: always
+inclusion: fileMatch
+fileMatchPattern: ["app/**", "lib/**", "auth.ts", "auth.config.ts", "prisma/**", "*.config.*"]
 ---
+
+<!-- Was always-on; now loads only when touching source files. The high-level
+     layout + current gaps also live in AGENTS.md (always loaded), so this file
+     no longer needs to double-load on every turn. Pull manually with #structure
+     if you need it outside a code edit. -->
 
 # Structure & Current State
 

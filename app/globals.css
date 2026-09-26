@@ -1,38 +1,139 @@
-@import url('https://fonts.googleapis.com/css2?family=Russo+One&family=Poppins:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Archivo+Expanded:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 @import 'tailwindcss';
+
+/* ─── Design tokens: Logo-matched (teal / cyan / mint) ───────────────────────
+   Hook & Box logo identity: a saturated teal/cyan field with a light mint fill.
+   Brand is carried by --teal / --cyan / --aqua; --accent is a single warm
+   complementary pop reserved for the primary CTA and true alerts only. Money
+   and prices read as neutral deep-teal mono data (--ink), never the CTA accent.
+   Structure is unchanged from the prior system — rounded surfaces, hairline
+   outlines, soft diffuse lifts. The --coral / --coral-ink / --shadow-coral
+   tokens are legacy aliases to the accent tokens so existing CTA/alert call
+   sites keep working.                                                          */
+:root {
+  /* Color — Logo-matched: saturated teal field, mint fill, bright cyan.
+     Brand identity is carried by teal/cyan/mint; the warm --accent is a single
+     complementary pop reserved for the primary CTA and true alerts only.
+     Money/prices read as deep-teal mono data, never as the CTA accent.        */
+  --ink: #103A45;        /* deep teal ink: text + primary outlines             */
+  --line: rgb(16 58 69 / 0.14);  /* hairline outline for cards/rules/dividers */
+  --line-strong: rgb(16 58 69 / 0.28); /* slightly firmer hairline when needed */
+  --teal: #34A6BD;       /* brand primary — logo teal field                   */
+  --teal-deep: #1C6E80;  /* admin chrome / dark bands — logo darker teal      */
+  --cyan: #58C6DB;       /* bright logo cyan — secondary highlights / hero    */
+  --aqua: #B7ECEB;       /* logo mint fill — highlights / tags                */
+  --accent: #FF7A4D;     /* complementary warm pop — CTAs + alerts ONLY       */
+  --accent-ink: #C7431F; /* accent text on paper (contrast-safe)              */
+  --marigold: #F5B841;   /* secondary warm — low stock / warnings             */
+  --plum: #6B5B95;       /* rare tertiary — category hue / tag variety        */
+  --paper: #EAF6F6;      /* cool mint-tinted off-white page canvas            */
+  --paper-2: #D8EEEE;    /* slightly deeper mint tint for surfaces            */
+  --card: #F8FDFD;       /* card surface (barely-tinted white)                */
+  --muted: #5A787E;      /* muted body / captions on paper                    */
+
+  /* Legacy coral aliases → new accent (kept so existing call sites don't break;
+     retired in the doc-cleanup step once no coral references remain).         */
+  --coral: var(--accent);
+  --coral-ink: var(--accent-ink);
+
+  /* Legacy hex kept as fallbacks during migration */
+  --legacy-surface: #DFF3F5;
+  --legacy-border: #B8E4EC;
+
+  /* Structure — rounded + soft, no hard offsets */
+  --radius: 14px;                      /* generous editorial rounding          */
+  --radius-sm: 10px;                   /* inputs, tags, small controls         */
+  --radius-lg: 20px;                   /* hero panels / large surfaces         */
+  --border-w: 1px;                     /* hairline                             */
+  --rule: 1px solid var(--line);
+  --shadow-ink: rgb(18 60 74 / 0.5);   /* legacy alias (kept for old inline shadows) */
+  /* Soft, diffuse lifts replace the stamped offset shadows */
+  --shadow-hard: 0 8px 24px -12px rgb(18 60 74 / 0.28);
+  --shadow-hard-sm: 0 4px 14px -8px rgb(18 60 74 / 0.22);
+  --shadow-accent: 0 10px 26px -12px rgb(255 122 77 / 0.45);
+  --shadow-coral: var(--shadow-accent); /* legacy alias — retired in cleanup   */
+
+  /* Type roles */
+  --font-display: 'Archivo Expanded', 'Archivo', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+}
+
+/* ─── Quiet-editorial normalization ──────────────────────────────────────────
+   The prototype hard-codes `border-2` and stamped offset shadows in many places.
+   Rather than edit every call site, soften them globally: thin the 2px strokes
+   to a hairline and translate any square-offset shadow into a soft diffuse lift.
+   Individual components can still opt into firmer treatment via the tokens.   */
+.border-2 { border-width: 1px !important; }
+.border,
+.border-2,
+.border-t-2, .border-b-2, .border-l-2, .border-r-2 {
+  border-color: var(--line);
+}
+/* Any hard offset shadow (Tailwind arbitrary `shadow-[Npx_Npx_0_...]`) → soft */
+[class*="shadow-[3px_3px_0"],
+[class*="shadow-[4px_4px_0"],
+[class*="shadow-[6px_6px_0"] {
+  box-shadow: var(--shadow-hard) !important;
+}
+[class*="hover:shadow-[4px_4px_0"]:hover {
+  box-shadow: var(--shadow-hard) !important;
+}
+/* Soften the brutalist active "press into the shadow" nudge */
+.active\:translate-x-\[2px\]:active { transform: translateY(1px) !important; }
 
 html, body, #root {
   height: 100%;
 }
 
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
 * {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-body);
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #85CDDB; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3899AE; }
+.font-display { font-family: var(--font-display); }
+.font-mono, .font-mono * { font-family: var(--font-mono); }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0px) rotate(-1deg); }
-  50% { transform: translateY(-12px) rotate(1deg); }
+/* Editorial eyebrow: uppercase mono label with a leading marker */
+.eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
 }
-@keyframes ping-slow {
-  0% { transform: scale(1); opacity: 0.7; }
-  100% { transform: scale(2); opacity: 0; }
+
+/* Receipt tape (the signature) — perforated top/bottom edges via CSS */
+.receipt-edge {
+  --tooth: 10px;
+  -webkit-mask:
+    radial-gradient(var(--tooth) at 50% 0, transparent 98%, #000) 0 0 / calc(var(--tooth) * 2) 100%,
+    radial-gradient(var(--tooth) at 50% 100%, transparent 98%, #000) 0 0 / calc(var(--tooth) * 2) 100%;
+          mask:
+    radial-gradient(var(--tooth) at 50% 0, transparent 98%, #000) 0 0 / calc(var(--tooth) * 2) 100%,
+    radial-gradient(var(--tooth) at 50% 100%, transparent 98%, #000) 0 0 / calc(var(--tooth) * 2) 100%;
 }
-@keyframes shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--paper-2); }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--teal); }
+
+/* Visible keyboard focus — coral ring on ink offset */
+:focus-visible {
+  outline: 3px solid var(--coral);
+  outline-offset: 2px;
 }
-.animate-float { animation: float 5s ease-in-out infinite; }
-.animate-ping-slow { animation: ping-slow 1.8s ease-out infinite; }
-.shimmer-text {
-  background: linear-gradient(90deg, #3899AE 0%, #9CEFE3 40%, #3899AE 60%, #3899AE 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: shimmer 4s linear infinite;
+
+/* Motion: a couple of restrained, deliberate transitions only */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
