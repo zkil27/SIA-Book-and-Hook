@@ -7,6 +7,17 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-10-01 — Add Git LFS hooks to custom githooks directory and push pending LFS objects
+
+**What:** Added Git LFS integration hooks (`pre-push`, `post-checkout`, `post-commit`, `post-merge`) into `githooks/` and uploaded all pending LFS objects via `git lfs push origin --all`.
+- `githooks/pre-push` ensures git push automatically uploads LFS-tracked assets (e.g. binaries, images) before sending commits to GitHub.
+- `githooks/post-checkout`, `post-commit`, and `post-merge` maintain LFS pointer synchronization.
+- Resolved remote rejection `GH008: Your push referenced at least 1 unknown Git LFS object` and pushed all commits cleanly to `origin/dev`.
+
+**Why:** Because the repository configures `core.hooksPath` to `githooks`, default `.git/hooks/` were bypassed, causing `git push` in IDEs/GUIs to omit automatic Git LFS object uploads and trigger remote pre-receive rejection errors.
+
+**Impact:** Future `git push` commands (via terminal or IDE UI) will automatically handle Git LFS binary uploads without remote pre-receive hook rejections.
+
 ## 2026-10-01 — Purge redundant AI agent directories, duplicate skills, and dead assets
 
 **What:** Cleaned up redundant AI tooling directories, duplicated skills, and transient artifacts across the repo:
