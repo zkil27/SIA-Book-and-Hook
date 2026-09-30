@@ -7,6 +7,16 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-10-01 — Add project DESIGN.md adapted with signature blue palette
+
+**What:** Added `DESIGN.md` in the project root defining the Aura Intelligent Hub design system specification.
+- Configured tokens for colors, typography (Geist + System Font), layout (flex, full bleed, 4px base rhythm), elevation/depth (glass, hairline border shell), shapes (2px/4px/6px tight radius), components (primary/link buttons, card surfaces), motion rules, and WebGL atmospheric background.
+- Adapted the primary and accent colors from the template's `#10B981` to Hook & Box's signature brand blue / teal (`#34A6BD`), along with brand supporting tokens (`#58C6DB` cyan, `#1C6E80` deep teal, and `#103A45` ink).
+
+**Why:** User requested to add the Aura design system specification as the project's design system while preserving Hook & Box's signature blue brand color.
+
+**Impact:** `impeccable context` and other AI design tools now resolve `DESIGN.md` as the normative design authority for styling and UI generation.
+
 ## 2026-10-01 — Install Impeccable design skills and toolsets across AI agents
 
 **What:** Installed `impeccable` design skill suite across project agent environments (`.agents`, `.claude`, `.cursor`, `.github`, `.kiro`) using `npx impeccable install --project -y`.
