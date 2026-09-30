@@ -7,6 +7,17 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-10-01 — Install Impeccable design skills and toolsets across AI agents
+
+**What:** Installed `impeccable` design skill suite across project agent environments (`.agents`, `.claude`, `.cursor`, `.github`, `.kiro`) using `npx impeccable install --project -y`.
+- Added skill definitions (`SKILL.md`), design command playbooks and references (`reference/`), scripts and CLI binaries (`scripts/bin/windows-x64/impeccable.exe`) to `.agents/skills/impeccable/`, `.claude/skills/impeccable/`, `.cursor/skills/impeccable/`, `.github/skills/impeccable/`, and `.kiro/skills/impeccable/`.
+- Configured agent hooks and definitions in `.claude/settings.local.json`, `.cursor/hooks.json`, `.github/hooks/impeccable.json`, `.codex/hooks.json`, and agent profiles in `.claude/agents/`, `.cursor/agents/`, and `.github/agents/`.
+- Updated `README.md` to document the new `impeccable` design skill alongside `frontend-design` and `hookandbox-stack`.
+
+**Why:** User requested to install `impeccable` to equip AI coding agents with a structured UI/UX design workflow, anti-pattern detection, design audit, and styling polish tools.
+
+**Impact:** AI assistants (Antigravity, Claude Code, Cursor, Copilot, Kiro) now have access to `/impeccable` commands (`init`, `critique`, `audit`, `polish`, `bolder`, `quieter`, `typeset`, etc.) and anti-pattern detectors for frontend refinement. No changes to database schema or application runtime logic.
+
 ## 2026-09-26 — Storefront resilience: catalog fallback for paused/offline database
 
 **What:** Added graceful error fallback handling to `lib/products.ts` and created `lib/fallback-catalog.ts`.

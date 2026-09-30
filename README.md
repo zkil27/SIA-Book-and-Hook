@@ -114,7 +114,8 @@ change is recorded in `docs/changelog.md` per the rule in `AGENTS.md`.
 
 Workspace-scoped Agent Skills live in each tool's skills directory (`.agents/`,
 `.claude/`, `.cursor/`, `.devin/`, `.kiro/`): `frontend-design` (distinctive
-UI guidance) and `hookandbox-stack` (this project's engineering rules). They
+UI guidance), `hookandbox-stack` (this project's engineering rules), and
+`impeccable` (design workflows, audit, and UI anti-pattern detection). They
 activate automatically when relevant.
 
 ## Deploy
