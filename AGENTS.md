@@ -169,11 +169,9 @@ Adding a new project-wide "never do this" rule? Encode it as a rule in
 
 ## Known issues / current gaps (roughly end of Week 1)
 
-1. **`build` script must become `prisma generate && next build`** for Vercel
-   (cached Prisma client goes stale otherwise). Current `postinstall` runs a
-   leftover `prisma skills sync` — the `@prisma/composer` skill files in
-   `.agents/.claude/.cursor/.devin` are NOT used by this project (standard
-   Prisma, not Composer). Ignore them.
+1. **`build` script is `prisma generate && next build`** for Vercel
+   (cached Prisma client goes stale otherwise). Unused `@prisma/composer` skill
+   files and redundant agent directories have been removed; standard Prisma is used.
 2. **No `prisma/seed.ts` and no `prisma/migrations/`** yet — the seed (~50
    products) is the de-facto backup on Supabase's free tier; commit it.
 3. **`app/page.tsx` is a ~1200-line `"use client"` monolith** holding every

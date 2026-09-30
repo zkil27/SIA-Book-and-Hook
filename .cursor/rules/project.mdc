@@ -9,7 +9,3 @@ rules (centavos money, append-only stock ledger, soft-delete, single Prisma
 client), Prisma/Supabase setup, commands, and current gaps.
 
 @AGENTS.md
-
-Do not treat the `@prisma/composer` SKILL.md files under `.agents/`, `.claude/`,
-`.cursor/skills/`, `.devin/` as instructions for this project — it uses standard
-Prisma, not Prisma Composer.

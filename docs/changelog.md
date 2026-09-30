@@ -7,6 +7,20 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-10-01 — Purge redundant AI agent directories, duplicate skills, and dead assets
+
+**What:** Cleaned up redundant AI tooling directories, duplicated skills, and transient artifacts across the repo:
+- Removed duplicate tool-specific folders: `.claude/`, `.codex/`, `.devin/`.
+- Cleaned up duplicated skills and tool hooks from `.cursor/` (`agents/`, `hooks.json`, `skills/` removed; preserved `rules/project.mdc`), `.kiro/` (`skills/` removed; preserved `hooks/` and `steering/`), and `.github/` (`agents/`, `hooks/`, `skills/` removed; preserved CI `workflows/` and PR template).
+- Removed redundant copies of `impeccable` (reclaiming ~64 MB of duplicate Windows `.exe` binaries across 4 folders), retaining the single canonical copy in `.agents/skills/impeccable/`.
+- Deleted unused `@prisma/composer` skill (`.agents/skills/prisma-composer/`) as standard Prisma is used.
+- Removed transient planning document `plans/what-can-u-recommend-sunny-lagoon.md` and scratch artifact `font-input.json`.
+- Updated `README.md`, `AGENTS.md`, `.cursor/rules/project.mdc`, and `.windsurfrules` to reflect canonical skill locations in `.agents/skills/` and remove obsolete references to `@prisma/composer`.
+
+**Why:** User requested removal of redundant AI bloat and files after skill installation broadcasted identical skills, executables, and hooks across multiple IDE agent directories.
+
+**Impact:** Reclaimed over 64 MB of repository disk space and eliminated ~240 duplicate files and dead-weight configs, keeping `.agents/` as the single canonical workspace skill root without impacting application runtime, schema, or tests.
+
 ## 2026-10-01 — Add project DESIGN.md adapted with signature blue palette
 
 **What:** Added `DESIGN.md` in the project root defining the Aura Intelligent Hub design system specification.
