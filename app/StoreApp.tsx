@@ -665,25 +665,33 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
               )}
 
               {toSaleItems.length > 0 && (
-                <div className="mb-5 bg-[color:var(--marigold)]/20 border border-[color:var(--marigold)] px-4 py-4 md:px-5">
+                <div className="mb-5 bg-[color:var(--marigold)]/15 border border-[color:var(--marigold)] px-4 py-4 md:px-5 md:py-5">
                   <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div>
-                      <p className="text-base font-bold text-[color:var(--ink)]">
-                        {toSaleItems.length} item{toSaleItems.length > 1 ? "s" : ""} ready for FIFO sale
-                      </p>
-                      <p className="text-xs text-[color:var(--ink)]/70 mt-1">
-                        These items have remaining stock that has been unsold for at least {TO_SALE_AFTER_DAYS} days.
-                      </p>
+                    <div className="flex items-start gap-3">
+                      <span className="w-8 h-8 rounded-full bg-[color:var(--marigold)] flex items-center justify-center text-sm font-mono font-bold text-[color:var(--ink)] shrink-0">
+                        {toSaleItems.length}
+                      </span>
+                      <div>
+                        <p className="text-base font-bold text-[color:var(--ink)]">
+                          FIFO sale queue
+                        </p>
+                        <p className="text-xs text-[color:var(--ink)]/70 mt-1">
+                          Oldest remaining stock, unsold for {TO_SALE_AFTER_DAYS}+ days.
+                        </p>
+                      </div>
                     </div>
                     <button onClick={() => { setInvStatus("To Sale"); setActiveTab("inventory"); }} className="text-sm font-mono font-bold uppercase tracking-wide text-[color:var(--ink)] underline underline-offset-4 whitespace-nowrap">
                       View To Sale →
                     </button>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-4 pt-3 border-t border-[color:var(--marigold)]/50 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                     {toSaleItems.map(item => (
-                      <span key={item.id} className="bg-[color:var(--marigold)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ink)]">
-                        {item.name} · {stockAgeDays(item.oldestStockAt)}d old
-                      </span>
+                      <div key={item.id} className="min-w-0 bg-[color:var(--marigold)] px-3 py-2.5 flex items-center justify-between gap-3">
+                        <span className="min-w-0 text-xs font-semibold leading-snug text-[color:var(--ink)]">{item.name}</span>
+                        <span className="shrink-0 text-[10px] font-mono font-bold uppercase tracking-wide text-[color:var(--ink)]/70">
+                          {stockAgeDays(item.oldestStockAt)}d
+                        </span>
+                      </div>
                     ))}
                   </div>
                 </div>

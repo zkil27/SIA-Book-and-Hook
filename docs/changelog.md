@@ -7,6 +7,18 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-10-10 — Reformat FIFO sale queue for readability
+
+**What:** Reworked the dashboard **To Sale** panel into an organized FIFO sale
+queue with a count marker, concise explanation, equal-width responsive cards,
+and right-aligned stock-age labels.
+
+**Why:** The previous variable-width badges created an uneven, difficult-to-
+scan wall of product names when many items were flagged.
+
+**Impact:** Admin-only presentation change. The same products, seven-day rule,
+and inventory navigation remain unchanged.
+
 ## 2026-10-10 — Make the pre-commit runtime error actionable
 
 **What:** Added Node.js version requirements to `package.json` and a runtime
