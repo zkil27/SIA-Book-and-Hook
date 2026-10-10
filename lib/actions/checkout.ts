@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { getUser } from "@/lib/session";
 import { deliveryFeeFor } from "@/lib/money";
-import { DELIVERY_SLOTS, orderCode } from "@/lib/meta";
+import { DELIVERY_SLOTS, orderCode, parseOrderCode } from "@/lib/meta";
 import { dbError, fail, ok, refreshAll, serializable, UserError, type ActionResult } from "./util";
 
 const PlaceOrder = z.object({
@@ -118,3 +118,74 @@ export async function placeOrder(input: PlaceOrderInput): Promise<ActionResult<{
     return dbError(err);
   }
 }
+
+/**
+ * Customer-facing cancellation:
+ * Allowed when the order is not yet in delivery (status is PENDING or CONFIRMED).
+ * Writes compensating stock movements to return held inventory into the ledger.
+ */
+export async function cancelCustomerOrder(orderCodeInput: string, reason?: string): Promise<ActionResult> {
+  const user = await getUser();
+  const n = parseOrderCode(orderCodeInput);
+  if (!n) return fail("Invalid order code.");
+
+  const note = reason?.trim() && reason.trim().length >= 2 ? reason.trim() : "Cancelled by customer";
+
+  try {
+    await serializable(async tx => {
+      const order = await tx.order.findUnique({
+        where: { orderNumber: n },
+        include: { stockMovements: { select: { variantId: true, quantity: true } } },
+      });
+      if (!order) throw new UserError("Order not found.");
+
+      if (user && user.role !== "ADMIN" && order.customerId !== user.id) {
+        throw new UserError("You don't have permission to cancel this order.");
+      }
+
+      if (order.status === "READY" || order.status === "COMPLETED") {
+        throw new UserError("This order is already out for delivery or completed and cannot be cancelled.");
+      }
+      if (order.status === "CANCELLED") {
+        throw new UserError("This order is already cancelled.");
+      }
+
+      const code = orderCode(order.orderNumber);
+      const actorId = user?.id ?? order.customerId;
+
+      // Return exactly what this order still holds per variant into the ledger.
+      const held = new Map<string, number>();
+      for (const m of order.stockMovements) held.set(m.variantId, (held.get(m.variantId) ?? 0) - m.quantity);
+      const returns = [...held.entries()].filter(([, q]) => q > 0);
+      if (returns.length) {
+        await tx.stockMovement.createMany({
+          data: returns.map(([variantId, q]) => ({
+            variantId,
+            quantity: q,
+            reason: `Cancelled by customer — ${code} (back to stock)`,
+            orderId: order.id,
+            actorId,
+          })),
+        });
+      }
+
+      await tx.order.update({ where: { id: order.id }, data: { status: "CANCELLED" } });
+      await tx.orderStatusEvent.create({
+        data: {
+          orderId: order.id,
+          fromStatus: order.status,
+          toStatus: "CANCELLED",
+          actorId,
+          note,
+        },
+      });
+    });
+
+    refreshAll();
+    return ok(null);
+  } catch (err) {
+    if (err instanceof UserError) return fail(err.message);
+    return dbError(err);
+  }
+}
+

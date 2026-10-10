@@ -228,22 +228,37 @@ export function CheckoutFlow({ defaultName, offline }: { defaultName: string; of
                           role="radio"
                           aria-checked={on}
                           onClick={() => setPayment(m.id)}
-                          className={`relative flex items-start gap-3 rounded-xl p-4 text-left ring-inset transition-[box-shadow,background-color,transform] active:scale-[0.99] ${
+                          className={`relative flex items-start gap-3 rounded-xl p-4 text-left ring-inset transition-[box-shadow,background-color] ${
                             on ? "bg-mint-soft ring-2 ring-teal-deep" : "bg-ice ring-1 ring-ice-3 hover:ring-ink-3"
                           }`}
                         >
-                          <span className={`grid size-11 shrink-0 place-items-center rounded-lg ${on ? "bg-teal-deep text-white" : "bg-paper text-ink-2"}`}>
+                          <span className={`grid size-11 shrink-0 place-items-center rounded-lg transition-colors ${on ? "bg-teal-deep text-white" : "bg-paper text-ink-2"}`}>
                             <m.icon className="size-5" aria-hidden />
                           </span>
-                          <span>
+                          <span className="min-w-0 flex-1 pr-7">
                             <span className="block font-bold text-ink">{m.title}</span>
                             <span className="mt-0.5 block text-[13px] text-ink-3">{m.desc}</span>
                           </span>
-                          {on && (
-                            <motion.span layoutId="pay-check" className="absolute right-3 top-3 grid size-6 place-items-center rounded-full bg-teal-deep text-white">
-                              <Check className="size-4" aria-hidden />
-                            </motion.span>
-                          )}
+                          <span
+                            className={`absolute right-3.5 top-3.5 grid size-6 place-items-center rounded-full transition-all duration-200 ${
+                              on ? "bg-teal-deep text-white shadow-sm ring-0" : "border-2 border-ice-3 bg-paper/60 text-transparent"
+                            }`}
+                          >
+                            <AnimatePresence>
+                              {on && (
+                                <motion.span
+                                  key={`check-${m.id}`}
+                                  initial={reduce ? undefined : { scale: 0, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  exit={reduce ? undefined : { scale: 0, opacity: 0 }}
+                                  transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                                  className="grid place-items-center"
+                                >
+                                  <Check className="size-3.5 stroke-[2.5]" aria-hidden />
+                                </motion.span>
+                              )}
+                            </AnimatePresence>
+                          </span>
                         </button>
                       );
                     })}

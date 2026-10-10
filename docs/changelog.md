@@ -5,6 +5,19 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-10-10 — Fix payment method radio checkmark animation and layout projection glitch
+
+**What:**
+- Added `components/shop/CancelOrderDialog.tsx` and wired it into `app/(shop)/track/page.tsx`, allowing customers to cancel pending or confirmed orders with standard reason presets and optional notes.
+- Fixed broken checkmark animation in `components/shop/CheckoutFlow.tsx` where `layoutId="pay-check"` conflicted with parent CSS `active:scale-[0.99]` and `transition-[...,transform]`, causing the checkmark circle to freeze stuck across the card's right border during selection.
+- Replaced fragile `layoutId` projection across disconnected card containers with a statically anchored radio indicator at `right-3.5 top-3.5` containing an `AnimatePresence`-driven spring checkmark (`scale: 0 -> 1`, `stiffness: 500, damping: 28`).
+- Added an empty subtle radio ring (`border-2 border-ice-3 bg-paper/60`) for unselected states and padded card text with `pr-7` to eliminate any possible badge text overlap.
+- Imported `parseOrderCode` from `@/lib/meta` in `lib/actions/checkout.ts` to support lookup order actions.
+
+**Why:** The checkmark circle glitched during selection animation and remained stuck halfway across the right border of the GCash card.
+
+**Impact:** Snappy, reliable, and tactile selection feedback on payment radio cards with zero layout projection bugs.
+
 ## 2026-10-10 — Fix checkout receipt Thank You stamp layout collision
 
 **What:**

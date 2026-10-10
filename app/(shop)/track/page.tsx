@@ -7,6 +7,7 @@ import { orderCode, parseOrderCode, PAYMENT_LABEL, splitName } from "@/lib/meta"
 import { peso } from "@/lib/money";
 import { fmtDateTime } from "@/lib/time";
 import { OrderTracker } from "@/components/shop/OrderTracker";
+import { CancelOrderDialog } from "@/components/shop/CancelOrderDialog";
 import { Button, StatusChip } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Track an order" };
@@ -54,16 +55,21 @@ export default async function TrackPage(props: PageProps<"/track">) {
             .
           </Notice>
         )}
-        {result && result !== "offline" && (
-          <div className="rounded-[var(--radius-card)] bg-paper p-5 ring-1 ring-inset ring-ice-3 sm:p-8">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-[13px] text-ink-3">Order</p>
-                <p className="font-marker text-[38px] leading-tight text-marker-deep">{result.code}</p>
-                <p className="text-sm text-ink-3">Placed {fmtDateTime(result.createdAt)}</p>
+        {result && result !== "offline" && (() => {
+          const canCancel = result.status === "PENDING" || result.status === "CONFIRMED";
+          return (
+            <div className="rounded-[var(--radius-card)] bg-paper p-5 ring-1 ring-inset ring-ice-3 sm:p-8">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[13px] text-ink-3">Order</p>
+                  <p className="font-marker text-[38px] leading-tight text-marker-deep">{result.code}</p>
+                  <p className="text-sm text-ink-3">Placed {fmtDateTime(result.createdAt)}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <StatusChip status={result.status} />
+                  {canCancel && <CancelOrderDialog code={result.code} />}
+                </div>
               </div>
-              <StatusChip status={result.status} />
-            </div>
             <div className="mt-8">
               <OrderTracker
                 status={result.status}
@@ -90,8 +96,14 @@ export default async function TrackPage(props: PageProps<"/track">) {
                 <dd className="tabular text-right text-lg font-bold">{peso(result.total)}</dd>
               </dl>
             </div>
+            {canCancel && (
+              <p className="mt-6 border-t border-ice-3 pt-4 text-xs text-ink-3">
+                Orders can be cancelled anytime before they are marked Out for delivery. All reserved items are immediately returned to available stock.
+              </p>
+            )}
           </div>
-        )}
+        );
+      })()}
       </div>
     </div>
   );
