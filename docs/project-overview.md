@@ -173,18 +173,16 @@ You don't need to code these, just recognize the names:
 
 ### What the site looks like (the visual style)
 
-The UI is styled to match the **Hook & Box logo**: a saturated teal/cyan brand
-identity with a light mint fill, on a cool mint-tinted "paper" canvas. Structure
-comes from rounded surfaces, hairline outlines, and soft diffuse shadows, with
-big bold headlines and a monospace typeface for anything numeric — prices, order
-IDs, stock counts, and especially the stock ledger. The brand is carried by
-teal/cyan/mint; a single warm accent (a coral/orange complement) is reserved for
-the primary buttons and true alerts only, so it pops against the cool field.
-Money and prices read as neutral deep-teal mono data, not as buttons. The design
-tokens (colors, fonts, borders) are defined once in `app/globals.css` and reused
-everywhere, so the whole app stays consistent. If asked "why does it look like
-that?": the palette echoes the logo, and the monospace numerics tie into the
-stock ledger, our star feature.
+The UI is built on an appetite-driven **Coastal Market** design system, combining maritime depth with fresh, appetite-stimulating culinary accents:
+- **Colors:** Deep Tide Ink (`#0E2931`) for crisp typography, Ocean Teal (`#1F7A8C`) and Coastal Foam (`#4ECDC4`) for brand authenticity, high-conversion Sea-Prawn Coral (`#FF5722`) for buy actions and urgency, Calamansi Citrus Gold (`#F59E0B`) for daily catch spotlights and ratings, and Warm Pearl Canvas (`#FAF8F5`) replacing sterile cold-blue backgrounds.
+- **Atmosphere & Surfaces:** Warm pearl surfaces with subtle coastal dock gradients, frosted glass elevation (`backdrop-blur-md`), and a live dawn dock ticker.
+- **Wet-Market Experience:** "Catch of the Day" hero spotlight with instant 1-click cart addition, dual species and culinary dish filtering (Sinigang, Inihaw, Ginataan, Kilawin), authentic "Linis & Kaliskis" (Free Cleaning & Scaling) preparation badges, and Fishmonger's Cold-Chain Quality Guarantees.
+- **Dockside Catch Basket:** A tactile seafood cooler experience replacing generic cart sidebars. Features a live dawn port batch header, cold-chain free-delivery progress tracker, rich catch cards with inline quantity steppers and prep selectors (Linis & Kaliskis, Whole, Sliced Steaks), thermal foam box trust cards, and an itemized tear-off order receipt. Hook & Box strictly specializes in pure fresh seafood with zero pantry clutter.
+- **Product Imagery & Iconography:** Resilient drop-in photography system supporting local high-resolution product photography in `/public/products/` with automatic high-craft SVG fallback illustrations. Clean, professional SVG vector iconography throughout with zero emojis.
+- **Micro-Animations & Tactile Motion:** Lightweight hardware-accelerated CSS keyframes and spring deceleration curves (`cubic-bezier(0.16, 1, 0.3, 1)`): tactile add-to-cart button pops (`✓ Added!`), navigation basket counter wiggles, living radar beacon on "Live on Ice" badges, smooth catalog filter cross-fades, spring-decelerated Catch Basket slide-over with stepper punches, and simulated receipt printer flash on new stock ledger entries. All motion strictly honors `prefers-reduced-motion`.
+- **Geometry & Rhythm:** Strict tight radius system (`2px` for badges, `4px` base for buttons/cards, `6px` for modals, and `9999px` status pills) adhering to a 4px layout cadence.
+- **Typography:** Display hierarchy uses Geist font with tight tracking, paired with monospace tabular representation for prices, order IDs, SKUs, and the load-bearing stock ledger.
+
 
 ### Why two database "addresses"?
 

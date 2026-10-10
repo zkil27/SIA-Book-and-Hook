@@ -1,134 +1,226 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Archivo+Expanded:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 @import 'tailwindcss';
 
-/* ─── Design tokens: Logo-matched (teal / cyan / mint) ───────────────────────
-   Hook & Box logo identity: a saturated teal/cyan field with a light mint fill.
-   Brand is carried by --teal / --cyan / --aqua; --accent is a single warm
-   complementary pop reserved for the primary CTA and true alerts only. Money
-   and prices read as neutral deep-teal mono data (--ink), never the CTA accent.
-   Structure is unchanged from the prior system — rounded surfaces, hairline
-   outlines, soft diffuse lifts. The --coral / --coral-ink / --shadow-coral
-   tokens are legacy aliases to the accent tokens so existing CTA/alert call
-   sites keep working.                                                          */
+/* ─── Coastal Market Palette & Design Tokens ───────────────────────────────────
+   Hook & Box Coastal Seafood Market Identity:
+   - Primary Maritime Blue: #1F7A8C (Deep, trustworthy coastal teal)
+   - Secondary Blue / Cyan: #4ECDC4 (Fresh ocean surf highlights)
+   - Brand Deep Chrome: #134F5C (Deep ocean chrome for headers & dark bands)
+   - Brand Ink: #0E2931 (Deep oceanic charcoal for high-contrast typography)
+   - Primary Appetite & Purchase Pop: #FF5722 (Sea-Prawn Coral — drives conversions!)
+   - Calamansi Citrus Gold: #F59E0B (Morning catch highlights & star badges)
+   - Live Wet-Market Fresh: #10B981 (Emerald live catch indicator)
+   - Warm Coastal Canvas: #FAF8F5 (Culinary warm pearl/sand, replaces sterile white)
+   - Surface Glass: rgba(255, 255, 255, 0.88) with 12px blur
+   - Geometry: 4px base rhythm, tight 4px radii with selective pill badges
+   ───────────────────────────────────────────────────────────────────────────── */
+
 :root {
-  /* Color — Logo-matched: saturated teal field, mint fill, bright cyan.
-     Brand identity is carried by teal/cyan/mint; the warm --accent is a single
-     complementary pop reserved for the primary CTA and true alerts only.
-     Money/prices read as deep-teal mono data, never as the CTA accent.        */
-  --ink: #103A45;        /* deep teal ink: text + primary outlines             */
-  --line: rgb(16 58 69 / 0.14);  /* hairline outline for cards/rules/dividers */
-  --line-strong: rgb(16 58 69 / 0.28); /* slightly firmer hairline when needed */
-  --teal: #34A6BD;       /* brand primary — logo teal field                   */
-  --teal-deep: #1C6E80;  /* admin chrome / dark bands — logo darker teal      */
-  --cyan: #58C6DB;       /* bright logo cyan — secondary highlights / hero    */
-  --aqua: #B7ECEB;       /* logo mint fill — highlights / tags                */
-  --accent: #FF7A4D;     /* complementary warm pop — CTAs + alerts ONLY       */
-  --accent-ink: #C7431F; /* accent text on paper (contrast-safe)              */
-  --marigold: #F5B841;   /* secondary warm — low stock / warnings             */
-  --plum: #6B5B95;       /* rare tertiary — category hue / tag variety        */
-  --paper: #EAF6F6;      /* cool mint-tinted off-white page canvas            */
-  --paper-2: #D8EEEE;    /* slightly deeper mint tint for surfaces            */
-  --card: #F8FDFD;       /* card surface (barely-tinted white)                */
-  --muted: #5A787E;      /* muted body / captions on paper                    */
+  /* Brand anchors */
+  --primary: #1F7A8C;
+  --brand-blue: #1F7A8C;
+  --brand-cyan: #4ECDC4;
+  --brand-deep: #134F5C;
+  --brand-ink: #0E2931;
 
-  /* Legacy coral aliases → new accent (kept so existing call sites don't break;
-     retired in the doc-cleanup step once no coral references remain).         */
-  --coral: var(--accent);
-  --coral-ink: var(--accent-ink);
+  /* Appetite & conversion accents */
+  --coral: #FF5722;
+  --coral-hover: #E64A19;
+  --coral-light: #FFEDE8;
+  --gold: #F59E0B;
+  --gold-light: #FEF3C7;
+  --emerald: #10B981;
+  --emerald-light: #D1FAE5;
+  --neutral: #0E2931;
 
-  /* Legacy hex kept as fallbacks during migration */
-  --legacy-surface: #DFF3F5;
-  --legacy-border: #B8E4EC;
+  /* Surfaces & canvas */
+  --background: #FAF8F5;
+  --surface: #FFFFFF;
+  --surface-warm: #F4EFEB;
+  --surface-glass: rgba(255, 255, 255, 0.88);
+  --surface-glass-card: rgba(255, 255, 255, 0.95);
 
-  /* Structure — rounded + soft, no hard offsets */
-  --radius: 14px;                      /* generous editorial rounding          */
-  --radius-sm: 10px;                   /* inputs, tags, small controls         */
-  --radius-lg: 20px;                   /* hero panels / large surfaces         */
-  --border-w: 1px;                     /* hairline                             */
-  --rule: 1px solid var(--line);
-  --shadow-ink: rgb(18 60 74 / 0.5);   /* legacy alias (kept for old inline shadows) */
-  /* Soft, diffuse lifts replace the stamped offset shadows */
-  --shadow-hard: 0 8px 24px -12px rgb(18 60 74 / 0.28);
-  --shadow-hard-sm: 0 4px 14px -8px rgb(18 60 74 / 0.22);
-  --shadow-accent: 0 10px 26px -12px rgb(255 122 77 / 0.45);
-  --shadow-coral: var(--shadow-accent); /* legacy alias — retired in cleanup   */
+  --text-primary: #0E2931;
+  --text-secondary: #374151;
+  --text-muted: #5C7177;
 
-  /* Type roles */
-  --font-display: 'Archivo Expanded', 'Archivo', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-mono: 'Space Mono', ui-monospace, monospace;
+  --line: rgba(14, 41, 49, 0.1);
+  --line-strong: rgba(14, 41, 49, 0.2);
+  --border-subtle: #E8E2D9;
+  --border-glass: rgba(255, 255, 255, 0.8);
+
+  /* Legacy & compatibility aliases */
+  --teal: var(--primary);
+  --teal-deep: var(--brand-deep);
+  --cyan: var(--brand-cyan);
+  --ink: var(--brand-ink);
+  --paper: var(--background);
+  --paper-2: var(--surface-warm);
+  --card: #FFFFFF;
+  --muted: var(--text-muted);
+  --accent: var(--coral);
+  --accent-rose: var(--coral);
+  --accent-ink: #BF360C;
+  --coral-ink: #BF360C;
+
+  /* Tight Aura Geometry */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 9999px;
+
+  /* Warm Depth & Diffuse Shadows */
+  --shadow-sm: 0 1px 3px 0 rgba(14, 41, 49, 0.04);
+  --shadow-glass: 0 10px 30px -10px rgba(14, 41, 49, 0.08);
+  --shadow-warm: 0 12px 28px -8px rgba(255, 87, 34, 0.15);
+  --shadow-coral: 0 8px 20px -6px rgba(255, 87, 34, 0.4);
+  --shadow-accent: var(--shadow-coral);
+
+  /* Typography */
+  --font-display: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
-
-/* ─── Quiet-editorial normalization ──────────────────────────────────────────
-   The prototype hard-codes `border-2` and stamped offset shadows in many places.
-   Rather than edit every call site, soften them globally: thin the 2px strokes
-   to a hairline and translate any square-offset shadow into a soft diffuse lift.
-   Individual components can still opt into firmer treatment via the tokens.   */
-.border-2 { border-width: 1px !important; }
-.border,
-.border-2,
-.border-t-2, .border-b-2, .border-l-2, .border-r-2 {
-  border-color: var(--line);
-}
-/* Any hard offset shadow (Tailwind arbitrary `shadow-[Npx_Npx_0_...]`) → soft */
-[class*="shadow-[3px_3px_0"],
-[class*="shadow-[4px_4px_0"],
-[class*="shadow-[6px_6px_0"] {
-  box-shadow: var(--shadow-hard) !important;
-}
-[class*="hover:shadow-[4px_4px_0"]:hover {
-  box-shadow: var(--shadow-hard) !important;
-}
-/* Soften the brutalist active "press into the shadow" nudge */
-.active\:translate-x-\[2px\]:active { transform: translateY(1px) !important; }
 
 html, body, #root {
   height: 100%;
 }
 
 body {
-  background: var(--paper);
-  color: var(--ink);
-}
-
-* {
+  background-color: var(--background);
+  color: var(--text-primary);
   font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
-.font-display { font-family: var(--font-display); }
-.font-mono, .font-mono * { font-family: var(--font-mono); }
-
-/* Editorial eyebrow: uppercase mono label with a leading marker */
-.eyebrow {
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.7rem;
+/* Browser surface theming */
+::selection {
+  background-color: rgba(255, 87, 34, 0.2);
+  color: #BF360C;
 }
 
-/* Receipt tape (the signature) — perforated top/bottom edges via CSS */
-.receipt-edge {
-  --tooth: 10px;
-  -webkit-mask:
-    radial-gradient(var(--tooth) at 50% 0, transparent 98%, #000) 0 0 / calc(var(--tooth) * 2) 100%,
-    radial-gradient(var(--tooth) at 50% 100%, transparent 98%, #000) 0 0 / calc(var(--tooth) * 2) 100%;
-          mask:
-    radial-gradient(var(--tooth) at 50% 0, transparent 98%, #000) 0 0 / calc(var(--tooth) * 2) 100%,
-    radial-gradient(var(--tooth) at 50% 100%, transparent 98%, #000) 0 0 / calc(var(--tooth) * 2) 100%;
+input, textarea {
+  caret-color: var(--coral);
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: var(--paper-2); }
-::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: var(--teal); }
-
-/* Visible keyboard focus — coral ring on ink offset */
 :focus-visible {
-  outline: 3px solid var(--coral);
+  outline: 2px solid var(--coral);
   outline-offset: 2px;
 }
 
-/* Motion: a couple of restrained, deliberate transitions only */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(14, 41, 49, 0.2);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--coral);
+}
+
+/* Surfaces & Card Systems */
+.market-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px 0 rgba(14, 41, 49, 0.04), 0 1px 2px -1px rgba(14, 41, 49, 0.04);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.market-card:hover {
+  border-color: #D3CBC0;
+  box-shadow: 0 4px 12px -2px rgba(14, 41, 49, 0.08);
+}
+
+.glass-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px 0 rgba(14, 41, 49, 0.04);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.glass-card:hover {
+  border-color: #D3CBC0;
+  box-shadow: 0 4px 12px -2px rgba(14, 41, 49, 0.08);
+}
+
+.glass-panel {
+  background-color: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Typography Helpers */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
+
+/* Motion & Micro-interaction Tokens */
+:root {
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Keyframes */
+@keyframes popScale {
+  0% { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+@keyframes slideInDrawer {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes fadeInBackdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes gridFadeIn {
+  from { opacity: 0.6; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Purposeful Utility classes */
+.anim-pop {
+  animation: popScale 180ms var(--ease-spring);
+}
+
+.anim-drawer-slide {
+  animation: slideInDrawer 260ms var(--ease-spring);
+}
+
+.anim-backdrop-fade {
+  animation: fadeInBackdrop 180ms var(--ease-smooth);
+}
+
+.anim-grid-fade {
+  animation: gridFadeIn 200ms var(--ease-spring);
+}
+
+.interactive-press {
+  transition: transform 100ms ease, opacity 100ms ease;
+}
+.interactive-press:active {
+  transform: scale(0.98);
+}
+
+/* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
