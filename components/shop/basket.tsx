@@ -113,6 +113,9 @@ export function BasketProvider({ children }: { children: ReactNode }) {
       const raw = window.localStorage.getItem(KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as BasketItem[];
+        // Reading localStorage is an external system and must wait for mount
+        // (the server has no storage), so this one setState-in-effect is intended.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (Array.isArray(parsed)) setItems(parsed.filter(i => i && i.variantId && i.qty > 0));
       }
     } catch {

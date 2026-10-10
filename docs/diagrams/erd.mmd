@@ -1,0 +1,84 @@
+%% Hook & Box ERD — derived from prisma/schema.prisma (2026-10-10).
+%% If this and the schema ever disagree, the schema wins; update this file.
+erDiagram
+  User ||--o{ Order : places
+  User |o--o{ StockMovement : "records (actorId)"
+  User |o--o{ OrderStatusEvent : "changes (actorId)"
+  Category ||--o{ Product : groups
+  Product ||--|{ ProductVariant : "sold as"
+  ProductVariant ||--o{ StockMovement : "ledger of"
+  ProductVariant ||--o{ OrderItem : "ordered as"
+  Order ||--|{ OrderItem : contains
+  Order |o--o{ StockMovement : "caused (orderId)"
+  Order ||--o{ OrderStatusEvent : "timeline of"
+
+  User {
+    string id PK
+    string name
+    string email UK
+    string passwordHash
+    Role role "ADMIN | CUSTOMER"
+    datetime createdAt
+  }
+  Category {
+    string id PK
+    string name
+    string slug UK
+  }
+  Product {
+    string id PK
+    string name
+    string description
+    string imageUrl "static /public path"
+    string categoryId FK
+    boolean active "soft delete"
+  }
+  ProductVariant {
+    string id PK
+    string productId FK
+    string name
+    string sku UK
+    int priceCentavos
+    datetime priceUpdatedAt
+    boolean active "soft delete"
+  }
+  StockMovement {
+    string id PK
+    string variantId FK
+    int quantity "+ in / - out"
+    string reason
+    string orderId FK "optional"
+    string actorId FK "optional"
+    datetime createdAt "append-only"
+  }
+  Order {
+    string id PK
+    int orderNumber UK "shown as HB-0005"
+    string customerId FK
+    OrderStatus status
+    PaymentMethod paymentMethod "GCASH | COD"
+    string deliveryName
+    string deliveryPhone
+    string deliveryAddress
+    string deliveryBarangay
+    string deliverySlot
+    int deliveryFeeCentavos
+    int totalCentavos
+    datetime createdAt
+  }
+  OrderItem {
+    string id PK
+    string orderId FK
+    string variantId FK
+    int quantity
+    int priceAtTime "centavos"
+  }
+  OrderStatusEvent {
+    string id PK
+    string orderId FK
+    OrderStatus fromStatus "null on creation"
+    OrderStatus toStatus
+    string note
+    string actorId FK "optional"
+    datetime createdAt "append-only"
+  }

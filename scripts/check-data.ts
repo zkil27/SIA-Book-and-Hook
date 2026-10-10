@@ -7,7 +7,7 @@
  *      non-negative integer (no floats, no negatives). Money is Int centavos
  *      everywhere; a fractional value here means someone stored pesos by mistake.
  *   2. Order totals are stable and correct: Order.totalCentavos equals the sum
- *      of its OrderItem.priceAtTime * quantity. These are STORED (not
+ *      of its OrderItem.priceAtTime * quantity plus Order.deliveryFeeCentavos. These are STORED (not
  *      recalculated) so history stays put — this check catches a total that was
  *      written wrong at creation time.
  *   3. OrderItem.priceAtTime is populated (captured price, so later price edits
@@ -48,6 +48,7 @@ async function main() {
     select: {
       id: true,
       totalCentavos: true,
+      deliveryFeeCentavos: true,
       items: { select: { quantity: true, priceAtTime: true } },
     },
   });
@@ -61,10 +62,12 @@ async function main() {
       badTotals++;
       r.fail(`Order ${o.id.slice(0, 8)} has invalid total: ${o.totalCentavos}`);
     }
-    const computed = o.items.reduce((s, i) => {
-      if (!isNonNegInt(i.priceAtTime)) badPriceAtTime++;
-      return s + i.priceAtTime * i.quantity;
-    }, 0);
+    // Stored total = items at their captured prices + the stored delivery fee.
+    const computed =
+      o.items.reduce((s, i) => {
+        if (!isNonNegInt(i.priceAtTime)) badPriceAtTime++;
+        return s + i.priceAtTime * i.quantity;
+      }, 0) + o.deliveryFeeCentavos;
     if (computed !== o.totalCentavos) {
       mismatchedTotals++;
       r.fail(

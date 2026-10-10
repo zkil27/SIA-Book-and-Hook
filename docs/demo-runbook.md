@@ -25,27 +25,31 @@ have a bigger problem than the demo, and you want to discover that on the 4th.
 
 ## The script — about 6 minutes
 
-**1. Storefront (60s)**
-Open the live URL. Browse the catalog. Filter by category. Open a product detail
-page showing variants and stock.
+**1. Storefront (75s)**
+Open the live URL. Filter a category or a dish ("Cook it as: Sinigang"). Open a
+product, switch 1kg ↔ 500g (the scale needle swings) and tap Add (the photo
+flies into the basket). Sign in as `maria@example.com`, check out, and show the
+printed receipt with its HB code, then **Track this order**.
 > "This is deployed and running against a real Postgres database — everything on
-> screen is coming from the database, not mock data."
+> screen is coming from the database, not mock data. Placing that order just
+> took the stock off the shelf in the ledger."
 
 **2. Admin login (30s)**
-Log in with the admin account. Land on the admin dashboard.
-> "Access is role-based — accounts carry an ADMIN or CUSTOMER role, checked in
-> middleware and again on every action that changes data."
+Sign out, sign in as `admin@hookandbox.ph`. Land on **Today**: the order you
+just placed is waiting in the inbox. Press **Confirm**, then **Undo** on the toast.
+> "Access is role-based — a customer account is turned away from /admin by the
+> proxy, and every admin action checks the role again."
 
-**3. Product CRUD (90s)**
-Create a product. Give it a real name — not "test test". Save it. Open the
-storefront in the other tab and show it appearing.
-Then edit an existing product's price and show the change reflected.
+**3. Products and prices (60s)**
+Press `⌘K`/`Ctrl K`, type "bangus", jump to it. Then open **Today's prices**,
+change two prices, save; show the storefront crawl flashing "New price".
 > "Prices are stored as integers in centavos, so there's no floating-point
 > rounding error in any total."
 
-**4. Stock adjustment and history (90s)** — *the important one*
-Adjust stock on a variant with a reason. Then open the stock history screen and
-show the movement you just made sitting on top of the seeded history.
+**4. Stock and the ledger (90s)** — *the important one*
+Record a **Walk-in sale**, then open the **Stock ledger**: the new entry sits on
+top with who, why, and that item's running balance. Click the item name to dim
+everything else. Press **Counter** on an entry to show a correction being added.
 > "Stock changes are recorded in an append-only ledger rather than just
 > overwriting a number. Every change has a reason and a timestamp, so a
 > discrepancy can always be traced. Corrections are written as compensating
@@ -68,10 +72,11 @@ Pointing at a written out-of-scope section reads as planning, not as a gap.
 
 ## Likely questions
 
-**"Why no checkout / payment?"**
-Deliberately out of scope — point to `docs/scope.md`. Handling real payment
-credentials in a class project is a liability, and the graded work is in the
-catalog, stock, and admin systems.
+**"Why no real payment?"**
+Checkout records the chosen method (GCash or cash on delivery) and shows static
+instructions; nothing is captured or settled. Deliberately out of scope — point
+to `docs/scope.md`. Handling real payment credentials in a class project is a
+liability, and the graded work is in the catalog, stock, and admin systems.
 
 **"Why store money as integers?"**
 Floating-point can't represent most decimal fractions exactly, so sums of prices

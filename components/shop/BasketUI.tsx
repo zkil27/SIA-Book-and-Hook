@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion, useAnimate, useReducedMotion } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { ArrowRight, Minus, Plus, Snowflake, Trash2 } from "lucide-react";
 import { useBasket } from "./basket";
 import { Odometer, Sheet, Stamp } from "@/components/ui/motion";
@@ -32,8 +32,18 @@ export function BasinIcon({ className = "", fill = 0 }: { className?: string; fi
   );
 }
 
+const noopSubscribe = () => () => {};
+/** False during server render and hydration, true afterwards. */
+function useHydrated() {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
+}
+
 export function BasketButton() {
-  const { count, setOpen, targetRef, bump, ready } = useBasket();
+  const { count: liveCount, setOpen, targetRef, bump, ready } = useBasket();
+  // The header can hydrate after the basket has loaded from storage, so the
+  // first client render must match the server's empty basket.
+  const hydrated = useHydrated();
+  const count = hydrated && ready ? liveCount : 0;
   const [scope, animateEl] = useAnimate();
   const reduce = useReducedMotion();
   const first = useRef(true);
@@ -67,7 +77,7 @@ export function BasketButton() {
           count > 0 ? "bg-marker text-white" : "bg-ice-2 text-ink-3"
         }`}
       >
-        {ready ? <Odometer value={count} /> : 0}
+        <Odometer value={count} />
       </span>
     </button>
   );

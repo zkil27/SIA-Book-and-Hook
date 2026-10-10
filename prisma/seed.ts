@@ -4,158 +4,53 @@
  * Design rules (see docs/data-model.md):
  *  - Money is stored as INTEGER CENTAVOS. ₱180.00 => 18000.
  *  - Stock is NEVER a stored count. Every variant's stock is the sum of its
- *    StockMovement rows (append-only ledger). Seeding "opening stock" means
- *    writing a positive movement, not setting a number.
+ *    StockMovement rows (append-only ledger). Opening stock, sales, restocks,
+ *    spoilage and corrections are all movements.
  *  - Products/variants are archived (active=false), never hard-deleted.
  *
- * Idempotent: clears seedable tables first so re-running gives a clean set.
- * It never drops User rows created outside the seed by email collision — it
- * upserts the demo accounts.
+ * Builds a believable last week for the demo: dated opening stock (some of it
+ * old enough to show in the FIFO "To sale" queue), a week of orders across
+ * every status with their timelines, walk-in sales, spoilage, a morning-count
+ * correction, an undo, and two price changes today.
  *
- * Run with: npx prisma db seed   (configured in package.json -> prisma.seed)
+ * Idempotent: clears seedable tables first. Demo users are upserted.
+ * Run with: npx prisma db seed
  */
-import { PrismaClient, OrderStatus, Role } from "@prisma/client";
+import { PrismaClient, OrderStatus, Role, type PaymentMethod } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { CATALOG } from "../lib/catalog-data";
 
 const prisma = new PrismaClient();
 
 const peso = (n: number) => Math.round(n * 100); // pesos -> centavos
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
 
-type VariantSeed = { name: string; sku: string; price: number; opening: number };
-type ProductSeed = {
-  name: string;
-  description: string;
-  variants: VariantSeed[];
-};
-type CategorySeed = { name: string; slug: string; products: ProductSeed[] };
+// Start of today in Manila (UTC+8), as a UTC instant.
+function startOfShopDay(): Date {
+  const local = new Date(Date.now() + 8 * HOUR);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - 8 * HOUR);
+}
+const TODAY = startOfShopDay();
+/** `days` ago at Manila clock time `hour` (fractional allowed). */
+const at = (days: number, hour: number) => new Date(TODAY.getTime() - days * DAY + hour * HOUR);
 
-// Prices are in PESOS here for readability; converted to centavos on insert.
-const CATALOG: CategorySeed[] = [
-  {
-    name: "Fish",
-    slug: "fish",
-    products: [
-      { name: "Bangus (Milkfish)", description: "Fresh whole milkfish, caught daily.", variants: [
-        { name: "Whole 1kg", sku: "FISH-BANGUS-W1", price: 180, opening: 42 },
-        { name: "Boneless 500g", sku: "FISH-BANGUS-BL500", price: 130, opening: 30 },
-      ]},
-      { name: "Tilapia", description: "Freshwater tilapia, cleaned on request.", variants: [
-        { name: "Whole 1kg", sku: "FISH-TILAPIA-W1", price: 150, opening: 60 },
-      ]},
-      { name: "Galunggong (Round Scad)", description: "Classic Pinoy round scad.", variants: [
-        { name: "1kg", sku: "FISH-GG-1", price: 200, opening: 35 },
-      ]},
-      { name: "Tamban (Sardines)", description: "Small fresh sardines, great for paksiw.", variants: [
-        { name: "1kg", sku: "FISH-TAMBAN-1", price: 120, opening: 28 },
-      ]},
-      { name: "Tulingan (Mackerel Tuna)", description: "Firm-fleshed mackerel tuna.", variants: [
-        { name: "Whole 1kg", sku: "FISH-TULINGAN-W1", price: 220, opening: 18 },
-      ]},
-      { name: "Maya-Maya (Red Snapper)", description: "Premium red snapper.", variants: [
-        { name: "Whole 1kg", sku: "FISH-SNAPPER-W1", price: 480, opening: 12 },
-        { name: "Fillet 500g", sku: "FISH-SNAPPER-F500", price: 320, opening: 8 },
-      ]},
-      { name: "Lapu-Lapu (Grouper)", description: "Prized grouper, ideal for steaming.", variants: [
-        { name: "Whole 1kg", sku: "FISH-GROUPER-W1", price: 550, opening: 9 },
-      ]},
-      { name: "Dilis (Anchovies)", description: "Tiny anchovies for frying.", variants: [
-        { name: "500g", sku: "FISH-DILIS-500", price: 140, opening: 24 },
-      ]},
-      { name: "Salmon Belly", description: "Rich imported salmon belly.", variants: [
-        { name: "500g", sku: "FISH-SALMON-B500", price: 380, opening: 15 },
-      ]},
-      { name: "Tanigue (Spanish Mackerel)", description: "Steak-cut Spanish mackerel.", variants: [
-        { name: "Steak 1kg", sku: "FISH-TANIGUE-S1", price: 600, opening: 7 },
-      ]},
-    ],
-  },
-  {
-    name: "Shellfish",
-    slug: "shellfish",
-    products: [
-      { name: "Hipon (Suahe Shrimp)", description: "Sweet suahe shrimp.", variants: [
-        { name: "1kg", sku: "SHELL-HIPON-1", price: 350, opening: 18 },
-        { name: "500g", sku: "SHELL-HIPON-500", price: 185, opening: 20 },
-      ]},
-      { name: "Tahong (Mussels)", description: "Green mussels, cleaned.", variants: [
-        { name: "500g", sku: "SHELL-TAHONG-500", price: 120, opening: 4 },
-        { name: "1kg", sku: "SHELL-TAHONG-1", price: 220, opening: 6 },
-      ]},
-      { name: "Talaba (Oysters)", description: "Fresh oysters by the dozen.", variants: [
-        { name: "Dozen", sku: "SHELL-TALABA-DOZ", price: 200, opening: 0 },
-      ]},
-      { name: "Halaan (Clams)", description: "Small clams for tinola.", variants: [
-        { name: "1kg", sku: "SHELL-HALAAN-1", price: 160, opening: 22 },
-      ]},
-      { name: "Scallops", description: "Half-shell scallops.", variants: [
-        { name: "500g", sku: "SHELL-SCALLOP-500", price: 300, opening: 10 },
-      ]},
-      { name: "Sugpo (Tiger Prawn)", description: "Large tiger prawns.", variants: [
-        { name: "1kg", sku: "SHELL-SUGPO-1", price: 750, opening: 8 },
-        { name: "500g", sku: "SHELL-SUGPO-500", price: 390, opening: 9 },
-      ]},
-      { name: "Curacha (Spanner Crab)", description: "Sweet spanner crab.", variants: [
-        { name: "1kg", sku: "SHELL-CURACHA-1", price: 520, opening: 5 },
-      ]},
-    ],
-  },
-  {
-    name: "Crab",
-    slug: "crab",
-    products: [
-      { name: "Alimasag (Blue Crab)", description: "Meaty blue swimming crab.", variants: [
-        { name: "1kg", sku: "CRAB-ALIMASAG-1", price: 420, opening: 9 },
-      ]},
-      { name: "Alimango (Mud Crab)", description: "Large mud crab, sold live.", variants: [
-        { name: "1kg", sku: "CRAB-ALIMANGO-1", price: 650, opening: 12 },
-        { name: "Jumbo 1.5kg", sku: "CRAB-ALIMANGO-J15", price: 980, opening: 4 },
-      ]},
-      { name: "Talangka (River Crab)", description: "Tiny river crabs for taba.", variants: [
-        { name: "500g", sku: "CRAB-TALANGKA-500", price: 260, opening: 14 },
-      ]},
-    ],
-  },
-  {
-    name: "Squid",
-    slug: "squid",
-    products: [
-      { name: "Pusit (Squid)", description: "Fresh squid, cleaned on request.", variants: [
-        { name: "1kg", sku: "SQUID-PUSIT-1", price: 280, opening: 25 },
-        { name: "500g", sku: "SQUID-PUSIT-500", price: 150, opening: 18 },
-      ]},
-      { name: "Pusit Bisaya (Baby Squid)", description: "Small tender baby squid.", variants: [
-        { name: "500g", sku: "SQUID-BISAYA-500", price: 190, opening: 11 },
-      ]},
-      { name: "Octopus (Pugita)", description: "Whole octopus, great for grilling.", variants: [
-        { name: "1kg", sku: "SQUID-PUGITA-1", price: 420, opening: 6 },
-      ]},
-    ],
-  },
-  {
-    name: "Prepared",
-    slug: "prepared",
-    products: [
-      { name: "Daing na Bangus (Marinated)", description: "Butterflied marinated milkfish.", variants: [
-        { name: "Pack (2 pcs)", sku: "PREP-DAING-2", price: 210, opening: 20 },
-      ]},
-      { name: "Tinapa (Smoked Fish)", description: "Traditional smoked fish.", variants: [
-        { name: "Pack (5 pcs)", sku: "PREP-TINAPA-5", price: 180, opening: 16 },
-      ]},
-      { name: "Bangus Sisig", description: "Ready-to-cook milkfish sisig.", variants: [
-        { name: "Tub 500g", sku: "PREP-SISIG-500", price: 250, opening: 12 },
-      ]},
-      { name: "Fish Tocino", description: "Sweet-cured fish tocino.", variants: [
-        { name: "Pack 500g", sku: "PREP-TOCINO-500", price: 190, opening: 14 },
-      ]},
-    ],
-  },
-];
+// Deterministic RNG so every seed run produces the same demo.
+let rngState = 20261010;
+function rand() {
+  rngState = (rngState * 1103515245 + 12345) % 2147483648;
+  return rngState / 2147483648;
+}
+const pick = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
+
+// Items whose opening stock arrived 9+ days ago and sells slowly: they land in
+// the admin's FIFO "To sale" queue.
+const SLOW_MOVERS = new Set(["FISH-TULINGAN-W1", "FISH-TAMBAN-1", "PREP-TINAPA-5", "PREP-TOCINO-500"]);
 
 async function clearData() {
-  // Order matters: children before parents.
-  // These are intentional full-table resets: the seed rebuilds the demo DB from
-  // scratch. The append-only-ledger and soft-delete rules apply to APP code, not
-  // to a seed reset, so each destructive line is explicitly opted out below.
+  // Order matters: children before parents. Intentional full-table resets: the
+  // seed rebuilds the demo DB from scratch, so each destructive line is opted out.
+  await prisma.orderStatusEvent.deleteMany(); // footgun-ok: seed reset, not app code
   await prisma.stockMovement.deleteMany(); // footgun-ok: seed reset, not app code
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
@@ -164,145 +59,242 @@ async function clearData() {
   await prisma.category.deleteMany();
 }
 
+async function upsertUser(email: string, name: string, role: Role, password: string) {
+  const passwordHash = await bcrypt.hash(password, 10);
+  return prisma.user.upsert({
+    where: { email },
+    update: { role, passwordHash, name },
+    create: { email, name, role, passwordHash },
+  });
+}
+
 async function main() {
   console.log("Clearing existing catalog / order data...");
   await clearData();
 
-  // --- Demo users -----------------------------------------------------------
-  const adminPassword = "admin123";
-  const customerPassword = "customer123";
+  // --- Users ------------------------------------------------------------------
+  const admin = await upsertUser("admin@hookandbox.ph", "Kiel (Admin)", Role.ADMIN, "admin123");
+  const clerk = await upsertUser("clerk@hookandbox.ph", "Chels (Clerk)", Role.ADMIN, "clerk123");
+  const maria = await upsertUser("maria@example.com", "Maria Santos", Role.CUSTOMER, "customer123");
+  const others = await Promise.all([
+    upsertUser("jose@example.com", "Jose Reyes", Role.CUSTOMER, "customer123"),
+    upsertUser("ana@example.com", "Ana Cruz", Role.CUSTOMER, "customer123"),
+    upsertUser("pedro@example.com", "Pedro Lim", Role.CUSTOMER, "customer123"),
+    upsertUser("liza@example.com", "Liza Mendoza", Role.CUSTOMER, "customer123"),
+  ]);
+  const customers = [maria, ...others];
+  const staff = [admin, clerk];
 
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@hookandbox.ph" },
-    update: { role: Role.ADMIN, passwordHash: await bcrypt.hash(adminPassword, 10), name: "Hook & Box Admin" },
-    create: {
-      email: "admin@hookandbox.ph",
-      name: "Hook & Box Admin",
-      role: Role.ADMIN,
-      passwordHash: await bcrypt.hash(adminPassword, 10),
-    },
-  });
-
-  const customer = await prisma.user.upsert({
-    where: { email: "maria@example.com" },
-    update: { role: Role.CUSTOMER, passwordHash: await bcrypt.hash(customerPassword, 10), name: "Maria Santos" },
-    create: {
-      email: "maria@example.com",
-      name: "Maria Santos",
-      role: Role.CUSTOMER,
-      passwordHash: await bcrypt.hash(customerPassword, 10),
-    },
-  });
-
-  // --- Catalog --------------------------------------------------------------
-  // Keep a lookup of sku -> { variantId, priceCentavos } for order seeding.
-  const variantBySku = new Map<string, { id: string; priceCentavos: number }>();
+  // --- Catalog + opening stock -------------------------------------------------
+  type V = { id: string; sku: string; price: number; productName: string; opening: number };
+  const variants: V[] = [];
+  const stock = new Map<string, number>();
   let productCount = 0;
-  let variantCount = 0;
 
   for (const cat of CATALOG) {
-    const category = await prisma.category.create({
-      data: { name: cat.name, slug: cat.slug },
-    });
-
+    const category = await prisma.category.create({ data: { name: cat.name, slug: cat.slug } });
     for (const p of cat.products) {
       const product = await prisma.product.create({
-        data: {
-          name: p.name,
-          description: p.description,
-          categoryId: category.id,
-          active: true,
-        },
+        data: { name: p.name, description: p.description, imageUrl: p.image, categoryId: category.id, active: true },
       });
       productCount++;
-
       for (const v of p.variants) {
         const variant = await prisma.productVariant.create({
-          data: {
-            productId: product.id,
-            name: v.name,
-            sku: v.sku,
-            priceCentavos: peso(v.price),
-          },
+          data: { productId: product.id, name: v.name, sku: v.sku, priceCentavos: peso(v.price) },
         });
-        variantCount++;
-        variantBySku.set(v.sku, { id: variant.id, priceCentavos: peso(v.price) });
-
-        // Opening stock is a ledger entry, not a stored number.
+        variants.push({ id: variant.id, sku: v.sku, price: peso(v.price), productName: p.name, opening: v.opening });
         if (v.opening > 0) {
+          // Opening stock carries a buffer that the week's sales then consume.
+          const qty = v.opening + (SLOW_MOVERS.has(v.sku) ? 3 : 8);
           await prisma.stockMovement.create({
             data: {
               variantId: variant.id,
-              quantity: v.opening,
-              reason: "Opening stock (seed)",
+              quantity: qty,
+              reason: SLOW_MOVERS.has(v.sku) ? "Opening stock" : "Restock — morning catch",
+              actorId: clerk.id,
+              // Fast movers arrived 6 days ago (before the first order, under the
+              // 7-day To-sale line); slow movers 10 days ago, so they're flagged.
+              createdAt: SLOW_MOVERS.has(v.sku) ? at(10, 6) : at(6, 5),
             },
           });
+          stock.set(variant.id, qty);
+        } else {
+          stock.set(variant.id, 0);
         }
       }
     }
   }
+  const bySku = new Map(variants.map(v => [v.sku, v]));
+  const sku = (s: string) => {
+    const v = bySku.get(s);
+    if (!v) throw new Error(`Unknown SKU ${s}`);
+    return v;
+  };
 
-  // --- A few historical orders with matching stock movements ----------------
-  // Each ordered line writes a negative StockMovement so the ledger and the
-  // derived stock stay consistent.
-  type Line = { sku: string; qty: number };
-  const orderSeeds: { customerId: string; status: OrderStatus; lines: Line[] }[] = [
-    { customerId: customer.id, status: OrderStatus.COMPLETED, lines: [
-      { sku: "FISH-BANGUS-W1", qty: 2 }, { sku: "SHELL-HIPON-1", qty: 1 },
-    ]},
-    { customerId: customer.id, status: OrderStatus.CONFIRMED, lines: [
-      { sku: "SQUID-PUSIT-1", qty: 1 }, { sku: "FISH-TILAPIA-W1", qty: 2 },
-    ]},
-    { customerId: customer.id, status: OrderStatus.PENDING, lines: [
-      { sku: "CRAB-ALIMANGO-1", qty: 1 },
-    ]},
+  async function move(v: V, quantity: number, reason: string, when: Date, extra: { orderId?: string; actorId?: string } = {}) {
+    const next = (stock.get(v.id) ?? 0) + quantity;
+    if (next < 0) throw new Error(`Seed would oversell ${v.sku}`);
+    stock.set(v.id, next);
+    return prisma.stockMovement.create({
+      data: { variantId: v.id, quantity, reason, createdAt: when, orderId: extra.orderId, actorId: extra.actorId },
+    });
+  }
+
+  // --- A week of orders ------------------------------------------------------
+  const addresses = [
+    ["Blk 5 Lot 12, Mabini St.", "Salawag"],
+    ["14 Aguinaldo Hwy", "Sampaloc"],
+    ["Phase 2, Blk 9 Lot 3", "Paliparan"],
+    ["22 Rizal Ave.", "Zone I"],
+    ["Villa Esperanza, Lot 7", "Langkaan"],
+    ["88 Burol Main Rd.", "Burol"],
   ];
+  const slots = ["6:00–8:00 AM", "8:00–10:00 AM", "10:00 AM–12:00 NN"];
+  const sellableSkus = variants.filter(v => v.opening > 0 && !SLOW_MOVERS.has(v.sku)).map(v => v.sku);
+
+  type Plan = { day: number; hour: number; status: OrderStatus; lines?: [string, number][]; cancelNote?: string };
+  const plans: Plan[] = [
+    { day: 6, hour: 7.2, status: OrderStatus.COMPLETED },
+    { day: 6, hour: 9.5, status: OrderStatus.COMPLETED },
+    { day: 5, hour: 8.1, status: OrderStatus.COMPLETED },
+    { day: 5, hour: 15.4, status: OrderStatus.CANCELLED, cancelNote: "Customer cancelled" },
+    { day: 4, hour: 7.6, status: OrderStatus.COMPLETED },
+    { day: 4, hour: 11.3, status: OrderStatus.COMPLETED },
+    { day: 3, hour: 6.8, status: OrderStatus.COMPLETED },
+    { day: 3, hour: 13.9, status: OrderStatus.COMPLETED },
+    { day: 2, hour: 8.4, status: OrderStatus.COMPLETED },
+    { day: 2, hour: 10.2, status: OrderStatus.COMPLETED },
+    { day: 1, hour: 7.1, status: OrderStatus.COMPLETED },
+    { day: 1, hour: 16.5, status: OrderStatus.READY },
+    { day: 0, hour: 6.3, status: OrderStatus.CONFIRMED, lines: [["SQUID-PUSIT-1", 1], ["FISH-TILAPIA-W1", 2]] },
+    { day: 0, hour: 7.4, status: OrderStatus.PENDING, lines: [["CRAB-ALIMANGO-1", 1], ["SHELL-HIPON-500", 1]] },
+    { day: 0, hour: 8.2, status: OrderStatus.PENDING, lines: [["FISH-BANGUS-W1", 2], ["SHELL-HALAAN-1", 1]] },
+    { day: 0, hour: 8.9, status: OrderStatus.PENDING, lines: [["SHELL-SUGPO-500", 1], ["SQUID-BISAYA-500", 1]] },
+  ];
+  // Seeded orders begin in the past, so drop any that would land in the future.
+  const nowMs = Date.now();
+  const flow: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.READY, OrderStatus.COMPLETED];
 
   let orderCount = 0;
-  for (const o of orderSeeds) {
-    const items = o.lines.map((l) => {
-      const v = variantBySku.get(l.sku);
-      if (!v) throw new Error(`Seed order references unknown SKU ${l.sku}`);
-      return { variantId: v.id, quantity: l.qty, priceAtTime: v.priceCentavos };
-    });
-    const total = items.reduce((s, i) => s + i.priceAtTime * i.quantity, 0);
+  for (const [i, plan] of plans.entries()) {
+    const placed = at(plan.day, plan.hour);
+    if (placed.getTime() > nowMs) continue;
+    const customer = i < 3 || plan.status === OrderStatus.PENDING ? customers[i % customers.length] : pick(customers);
+    const lines =
+      plan.lines ??
+      Array.from({ length: 1 + Math.floor(rand() * 3) }, () => [pick(sellableSkus), 1 + Math.floor(rand() * 2)] as [string, number]);
+    const merged = new Map<string, number>();
+    for (const [s, q] of lines) merged.set(s, (merged.get(s) ?? 0) + q);
+    const items = [...merged.entries()]
+      .map(([s, q]) => ({ v: sku(s), q: Math.min(q, stock.get(sku(s).id) ?? 0) }))
+      .filter(x => x.q > 0);
+    if (items.length === 0) continue;
+
+    const subtotal = items.reduce((s, x) => s + x.v.price * x.q, 0);
+    const fee = subtotal >= 50000 ? 0 : 5000;
+    const [address, barangay] = addresses[i % addresses.length];
+    const payment: PaymentMethod = i % 3 === 0 ? "COD" : "GCASH";
 
     const order = await prisma.order.create({
       data: {
-        customerId: o.customerId,
-        status: o.status,
-        totalCentavos: total,
-        items: { create: items },
+        customerId: customer.id,
+        status: plan.status,
+        paymentMethod: payment,
+        deliveryName: customer.name ?? "Customer",
+        deliveryPhone: `0917 ${String(200 + i * 37).padStart(3, "0")} ${String(1000 + i * 413).slice(0, 4)}`,
+        deliveryAddress: address,
+        deliveryBarangay: barangay,
+        deliverySlot: slots[i % slots.length],
+        deliveryFeeCentavos: fee,
+        totalCentavos: subtotal + fee,
+        createdAt: placed,
+        items: { create: items.map(x => ({ variantId: x.v.id, quantity: x.q, priceAtTime: x.v.price })) },
       },
     });
     orderCount++;
+    const code = `HB-${String(order.orderNumber).padStart(4, "0")}`;
 
-    // Only orders that consumed stock (confirmed/completed) reduce the ledger.
-    if (o.status === OrderStatus.COMPLETED || o.status === OrderStatus.CONFIRMED) {
-      for (const i of items) {
-        await prisma.stockMovement.create({
-          data: {
-            variantId: i.variantId,
-            quantity: -i.quantity,
-            reason: `Sale — order ${order.id.slice(0, 8)}`,
-          },
-        });
-      }
+    // Placing an order takes its stock off the shelf.
+    for (const x of items) await move(x.v, -x.q, `Sale — ${code}`, placed, { orderId: order.id });
+
+    // Timeline up to the order's current status.
+    await prisma.orderStatusEvent.create({
+      data: { orderId: order.id, toStatus: OrderStatus.PENDING, actorId: customer.id, note: "Placed online", createdAt: placed },
+    });
+    const target = plan.status === OrderStatus.CANCELLED ? OrderStatus.PENDING : plan.status;
+    let t = placed.getTime();
+    for (let s = 1; s <= flow.indexOf(target); s++) {
+      t += (0.4 + rand() * 1.4) * HOUR;
+      await prisma.orderStatusEvent.create({
+        data: { orderId: order.id, fromStatus: flow[s - 1], toStatus: flow[s], actorId: pick(staff).id, createdAt: new Date(Math.min(t, nowMs - 60_000)) },
+      });
+    }
+    if (plan.status === OrderStatus.CANCELLED) {
+      const when = new Date(placed.getTime() + 0.6 * HOUR);
+      for (const x of items) await move(x.v, x.q, `Cancelled — ${code} (back to stock)`, when, { orderId: order.id, actorId: admin.id });
+      await prisma.orderStatusEvent.create({
+        data: { orderId: order.id, fromStatus: OrderStatus.PENDING, toStatus: OrderStatus.CANCELLED, actorId: admin.id, note: plan.cancelNote, createdAt: when },
+      });
     }
   }
+
+  // --- Counter activity: walk-ins, spoilage, a recount, an undo -------------
+  const ifPast = (d: Date) => d.getTime() < nowMs;
+  const walkins: [string, number, number, number][] = [
+    ["FISH-GG-1", 2, 4, 9.1],
+    ["FISH-BANGUS-W1", 3, 3, 10.4],
+    ["SQUID-PUSIT-500", 2, 2, 8.7],
+    ["FISH-TAMBAN-1", 1, 2, 11.2],
+    ["SHELL-HIPON-1", 1, 1, 9.6],
+    ["FISH-TILAPIA-W1", 2, 0, 6.6],
+  ];
+  for (const [s, q, d, h] of walkins) {
+    if (ifPast(at(d, h))) await move(sku(s), -q, "Walk-in sale", at(d, h), { actorId: clerk.id });
+  }
+
+  await move(sku("SHELL-TAHONG-500"), -2, "Spoilage — shells open, discarded", at(3, 17.2), { actorId: clerk.id });
+  const damaged = await move(sku("FISH-SNAPPER-W1"), -3, "Damaged in transit", at(2, 7.0), { actorId: clerk.id });
+  // That one was a mistake (only 1 was damaged): fixed with a compensating entry.
+  await prisma.stockMovement.create({
+    data: {
+      variantId: damaged.variantId,
+      quantity: 3,
+      reason: `Undo of MV-${damaged.id.slice(-6).toUpperCase()}`,
+      actorId: admin.id,
+      createdAt: new Date(at(2, 7.0).getTime() + 20 * 60_000),
+    },
+  });
+  stock.set(damaged.variantId, (stock.get(damaged.variantId) ?? 0) + 3);
+  await move(sku("FISH-SNAPPER-W1"), -1, "Damaged in transit", new Date(at(2, 7.0).getTime() + 22 * 60_000), { actorId: admin.id });
+
+  // Yesterday's morning count found two fewer squid than the system had.
+  const squid = sku("SQUID-PUSIT-1");
+  const sys = stock.get(squid.id) ?? 0;
+  await move(squid, -2, `Morning count (counted ${sys - 2}, system had ${sys})`, at(1, 5.8), { actorId: clerk.id });
+
+  // Today's dawn restock for a few fast movers.
+  for (const [s, q] of [["FISH-BANGUS-W1", 12], ["SHELL-HIPON-1", 6], ["CRAB-ALIMASAG-1", 4]] as [string, number][]) {
+    if (ifPast(at(0, 5.4))) await move(sku(s), q, "Restock — morning catch", at(0, 5.4), { actorId: clerk.id });
+  }
+
+  // --- Two market price changes this morning --------------------------------
+  const changedAt = ifPast(at(0, 5.5)) ? at(0, 5.5) : new Date(nowMs - 60_000);
+  await prisma.productVariant.update({ where: { id: sku("FISH-BANGUS-W1").id }, data: { priceCentavos: peso(175), priceUpdatedAt: changedAt } });
+  await prisma.productVariant.update({ where: { id: sku("CRAB-ALIMANGO-1").id }, data: { priceCentavos: peso(680), priceUpdatedAt: changedAt } });
 
   console.log("\nSeed complete:");
   console.log(`  Categories: ${CATALOG.length}`);
   console.log(`  Products:   ${productCount}`);
-  console.log(`  Variants:   ${variantCount}`);
+  console.log(`  Variants:   ${variants.length}`);
   console.log(`  Orders:     ${orderCount}`);
   console.log("\nDemo accounts:");
-  console.log(`  ADMIN     ${admin.email} / ${adminPassword}`);
-  console.log(`  CUSTOMER  ${customer.email} / ${customerPassword}`);
+  console.log("  ADMIN     admin@hookandbox.ph / admin123");
+  console.log("  ADMIN     clerk@hookandbox.ph / clerk123");
+  console.log("  CUSTOMER  maria@example.com / customer123");
 }
 
 main()
-  .catch((e) => {
+  .catch(e => {
     console.error(e);
     process.exit(1);
   })

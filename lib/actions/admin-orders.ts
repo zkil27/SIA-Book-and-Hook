@@ -1,6 +1,5 @@
 "use server";
 
-import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/session";
 import { orderCode, STATUS_META, type OrderStatusKey } from "@/lib/meta";
 import { dbError, fail, ok, refreshAll, serializable, UserError, type ActionResult } from "./util";

@@ -167,20 +167,23 @@ task is wasted cost and is not allowed here.
 Adding a new project-wide "never do this" rule? Encode it as a rule in
 `scripts/check-footguns.ts` so it's enforced, not just documented.
 
-## Known issues / current gaps (roughly end of Week 1)
+## Known issues / current gaps (updated 2026-10-10)
 
 1. **`build` script is `prisma generate && next build`** for Vercel
-   (cached Prisma client goes stale otherwise). Unused `@prisma/composer` skill
-   files and redundant agent directories have been removed; standard Prisma is used.
-2. **No `prisma/seed.ts` and no `prisma/migrations/`** yet — the seed (~50
-   products) is the de-facto backup on Supabase's free tier; commit it.
-3. **`app/page.tsx` is a ~1200-line `"use client"` monolith** holding every
-   screen with hardcoded `PRODUCTS`/`ORDERS` arrays. Nothing reads the DB yet.
-   When wiring real data, decompose into real routes/components; reuse the brand
-   palette and `Btn`/`Card`/`Tag`/`FieldInput` primitives defined there.
-4. **No `/login` or `/admin` routes** — `auth.config.ts` points at `/login`
-   (missing) and defers role checks to pages; a CUSTOMER is not yet actually
-   rejected from `/admin`, which the scope requires.
+   (cached Prisma client goes stale otherwise).
+2. **UI structure:** the old `app/StoreApp.tsx` monolith is gone. Storefront is
+   `app/(shop)/**`, admin is `app/(admin)/admin/**`, shared UI in `components/`
+   (`ui/primitives.tsx`, `ui/PriceTag.tsx`, `ui/motion.tsx`, `ui/toast.tsx`).
+   Reads live in `lib/catalog.ts` / `lib/admin-data.ts`; every write is a server
+   action in `lib/actions/`. Visual direction: `PRODUCT.md` and
+   `.impeccable/surfaces/app-shop-page-tsx.md`.
+3. **Role gate:** `proxy.ts` (Next 16's renamed middleware) sends signed-out
+   users to `/login` and CUSTOMERs to `/login?denied=1`; admin layouts and every
+   admin action re-check with `requireAdmin()`.
+4. **Migration `20261010000000_storefront_admin_overhaul` must be applied** to
+   Supabase (`npx prisma migrate deploy; npx prisma db seed`) before the new
+   checkout/admin can write. Without a database the storefront falls back to the
+   static catalog and the admin shows an offline panel.
 5. **No keep-alive cron** — Supabase pauses free projects after ~7 idle days.
 
 ## Token / credit efficiency (how agents should work here)
@@ -197,8 +200,7 @@ already have.
 - **Search narrow.** Prefer a targeted grep/glob with an `includePattern` over
   reading large files; read only the line ranges you need.
 - **Prefer targeted edits over full-file rewrites.** Use string-replace edits;
-  never rewrite `app/StoreApp.tsx` (or any large file) wholesale to change a few
-  lines.
+  never rewrite a large file wholesale to change a few lines.
 - **Delegate big investigations to a sub-agent** (context-gatherer) so the
   exploration cost stays out of the main thread; then act on its summary.
 - **Verify exactly once, at the very end (mandatory).** Run `npm run verify`

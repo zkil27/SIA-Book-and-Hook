@@ -56,6 +56,25 @@ npx prisma db seed
 The seed prints the demo account credentials at the end. Save them — the
 September 5 demo depends on logging in without fumbling.
 
+### Applying later migrations (e.g. the 2026-10-10 UI overhaul)
+
+The overhaul added `prisma/migrations/20261010000000_storefront_admin_overhaul`
+(new order/variant/product columns and the `OrderStatusEvent` table). Apply it
+and reseed the demo data:
+
+```bash
+npx prisma migrate deploy
+npx prisma db seed
+```
+
+The migration backfills placeholder delivery values on existing orders so the
+new required columns can be added; the reseed then replaces them. Demo accounts
+after seeding: `admin@hookandbox.ph / admin123`, `clerk@hookandbox.ph / clerk123`
+(both staff) and `maria@example.com / customer123`.
+
+On Windows, stop `npm run dev` before `npx prisma generate`: the dev server locks
+the Prisma engine file and generate fails with `EPERM … rename`.
+
 Verify in the Supabase table editor that rows actually exist. Trusting the
 console output alone has burned people.
 
@@ -93,9 +112,10 @@ If a project is paused:
 
 To ensure the storefront never crashes with an unhandled `PrismaClientInitializationError`
 during presentations or local development if Supabase happens to be paused or unreachable,
-`lib/products.ts` catches database initialization/network failures and automatically falls
-back to the static seeded catalog (`lib/fallback-catalog.ts`), logging a console warning
-while serving the full storefront UI seamlessly.
+`lib/catalog.ts` catches database failures and falls back to the static catalog definition
+(`lib/catalog-data.ts`, the same data the seed uses), logging a console warning. The
+storefront shows a yellow "stock system is offline" banner and disables ordering in that
+mode. The admin shows a "Database is offline" panel with restore instructions instead.
 
 Set up the keep-alive cron for production:
 

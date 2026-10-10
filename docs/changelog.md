@@ -5,6 +5,97 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-10-10 — Fix checkout receipt Thank You stamp layout collision
+
+**What:**
+- Fixed layout collision in `components/shop/CheckoutFlow.tsx` (`ReceiptSlip`) where the red rubber "Thank you!" stamp was using hard-coded absolute positioning (`absolute bottom-20 right-5`), causing it to overlap and obscure receipt metadata lines (`Payment`, `Delivery slot`, `Status`).
+- Moved the stamp container into normal document flow below the metadata definition list with `mt-7 flex justify-center pb-2` and calibrated size/tilt (`text-[28px]`, `rotate={-8}`), ensuring clean visual hierarchy, generous breathing room, and zero text occlusion regardless of item count.
+
+**Why:** The stamp was placed directly on top of the payment method and delivery slot text in the confirmation receipt.
+
+**Impact:** Clean, legible confirmation receipt with an authentic, well-positioned ink stamp footer above the serrated tear edge.
+
+## 2026-10-10 — Fix basket drawer positioning & containing block trap
+
+**What:**
+- Resolved `position: fixed` containing block trap in `components/shop/ShopHeader.tsx` where `<BasketSheet />` was nested inside `<header className="... backdrop-blur-md">`, causing the basket drawer to be trapped within the 64px header and awkwardly float in the middle of the screen over the hero section.
+- Moved `<BasketSheet />` outside `<header>` and added `createPortal(..., document.body)` in `components/ui/motion.tsx` so all `Sheet` components mount directly at the document root.
+- Replaced synchronous `setState` in effect with `useSyncExternalStore` for client hydration (`useHydrated`) and media queries (`useMediaQuery`), satisfying React 19 / Compiler purity rules without cascading re-renders.
+- Enforced `h-[88dvh] max-h-[92dvh] sm:h-full` and `shrink-0` on sheet header/footer with `min-h-0 flex-1 overflow-y-auto` on the item list to ensure proper full-height drawer docking on desktop and bottom docking on mobile without footer overlap.
+
+**Why:** The basket sheet's checkout footer was floating in mid-air over the items and hero banner due to CSS `backdrop-filter` containing block isolation.
+
+**Impact:** Smooth, correctly anchored slide-over basket drawer on desktop and bottom sheet on mobile.
+
+## 2026-10-10 — Fix admin rail search trigger button text wrapping
+
+**What:**
+- Fixed two-line text wrapping ("Search or jump \n to...") inside the fixed-width desktop admin sidebar search trigger button in `components/admin/AdminShell.tsx`.
+- Changed label to `"Search or jump…"` with `truncate whitespace-nowrap`, adjusted padding (`px-2.5`), and set font size to `text-[13px] font-medium` to guarantee single-line fit alongside the `Search` icon and `⌘K` keycaps.
+
+**Why:** The search button label overflowed and broke awkwardly into two vertical lines in the desktop rail.
+
+**Impact:** Clean, single-line sidebar search trigger button matching Raycast/Linear conventions.
+
+## 2026-10-10 — Command palette (⌘K) UI polish & focus outline fix
+
+**What:**
+- Fixed jarring internal 2.5px teal focus outline around the search input in `components/admin/AdminShell.tsx` caused by global `:focus-visible` rule; exempted `outline-none` and `[data-no-outline]` elements in `app/globals.css`.
+- Polished Command Palette UX and aesthetics:
+  - Added dedicated navigation & action icons (`getItemIcon`).
+  - Rendered keyboard shortcuts using the project's `<Kbd>` keycap primitive instead of loose monospace text.
+  - Replaced raw return icon with clean selection cues.
+  - Eliminated awkward native scrollbar collision by adding right-padding, smooth custom thin scrollbars, and increased max height.
+  - Added bottom command guidance footer (`↑↓ to navigate · ↵ to select · esc to close`).
+
+**Why:** User requested `/impeccable fix` on the Command Palette where the input showed an internal focus box and cramped raw shortcut labels.
+
+**Impact:** Clean, consistent, and tactile Raycast/Linear-grade search experience across admin navigation.
+
+## 2026-10-10 — Fix Next 16 proxy.ts export recognition
+
+**What:**
+- Changed `export const { auth: proxy } = NextAuth(authConfig)` in `proxy.ts` to assign `const { auth } = NextAuth(authConfig)` and explicitly export `export const proxy = auth; export default auth;`.
+
+**Why:** Next.js 16's static analysis AST parser expects an `Identifier` named `proxy` on variable declarations or a default export; destructuring export syntax (`export const { auth: proxy }`) was not matched, resulting in `⨯ The file "./proxy.ts" must export a function, either as a default export or as a named "proxy" export.` on `next dev`.
+
+**Impact:** `next dev` and `next build` properly recognize the proxy function.
+
+## 2026-10-10 — Resolved Supabase connection, applied overhaul migration, and reseeded DB
+
+**What:**
+- Diagnosed database connection timeout to `aws-0-ap-southeast-1.pooler.supabase.com:6543` and `portquiz.net:5432/6543` as local ISP/network dropping outbound database ports (5432/6543); resolved by activating Cloudflare WARP.
+- Applied pending migration `prisma/migrations/20261010000000_storefront_admin_overhaul` (`npx prisma migrate deploy`).
+- Executed `npx prisma db seed` to populate categories (5), products (27), variants (34), orders (16), and stock ledger movements (78) with live demo accounts.
+- Verified database integrity and ledger invariants via `npm run check:all` and gate via `npm run verify` (all green).
+
+**Why:** User was unable to connect to Supabase database (`Can't reach database server at aws-0-ap-southeast-1.pooler.supabase.com:6543`).
+
+**Impact:** Supabase database is connected, fully in sync with the latest schema, and healthy. Storefront and admin now have live database backing with demo accounts active (`admin@hookandbox.ph`, `clerk@hookandbox.ph`, `maria@example.com`). Ensure Cloudflare WARP or VPN stays enabled while developing locally if on networks that block ports 5432 and 6543.
+
+## 2026-10-10 — Storefront + admin overhaul ("Palengke Price Board"), real routes on the DB
+
+**What:**
+- Replaced the `app/StoreApp.tsx` monolith (deleted, with `app/page.tsx`, `lib/products.ts`, `lib/fallback-catalog.ts`) with real App Router routes: storefront `app/(shop)/**` (catch, `p/[id]`, checkout, track, account, login, register, about, contact→about) and admin `app/(admin)/admin/**` (Today, orders, stock, prices, products, products/new, products/[id], categories, ledger).
+- New visual system in `app/globals.css` + `app/layout.tsx` (Anton, Permanent Marker, Geist; logo teal/mint, tarp yellow, marker red, cardboard, ice). Components in `components/ui/*`, `components/shop/*`, `components/admin/*`, `components/brand/Logo.tsx`.
+- Motion: basket toss, CSS tag-drop hero, hanging-scale variant picker, odometer counters, ink stamps, receipt print, tracker, undo toasts. All honor reduced motion.
+- Admin speed UX: ⌘K palette, `g`-shortcuts + `?` sheet, j/k/x/a on orders, bulk confirm, undo toasts, phone bottom tabs; Today inbox; Walk-in sale, Morning count, Today's prices board, order timeline, ledger with per-variant balance, isolate-on-select and "Counter this entry".
+- Data: `lib/catalog-data.ts` (shared catalog), `lib/catalog.ts`, `lib/admin-data.ts`, `lib/orders.ts`, `lib/ledger.ts`, `lib/meta.ts`, `lib/money.ts`, `lib/time.ts`, `lib/session.ts`; server actions in `lib/actions/*` (checkout in a serializable transaction with oversell check; every stock change is a new `StockMovement`).
+- Auth: role in the JWT (`auth.ts`, `auth.config.ts`, `types/next-auth.d.ts`); new `proxy.ts` rejects signed-out users and CUSTOMERs from `/admin`; `requireAdmin()` in layouts and actions.
+- Schema + migration `prisma/migrations/20261010000000_storefront_admin_overhaul`: `Product.imageUrl`, `ProductVariant.active` / `priceUpdatedAt`, `Order.orderNumber` / `paymentMethod` / delivery fields / `deliveryFeeCentavos`, `StockMovement.orderId` / `actorId`, new append-only `OrderStatusEvent`. `prisma/seed.ts` rewritten (a week of orders, timelines, walk-ins, spoilage, a morning count, an undo, two price changes; extra staff account `clerk@hookandbox.ph / clerk123`).
+- 27 product + 3 scene photos from Unsplash in `public/products/`, `public/scenes/` (credits: `docs/design/photo-credits.md`, source embedded in each file).
+- Dependencies: `motion`, `lucide-react`.
+- `scripts/check-footguns.ts`: also catches `tx.` clients and blocks edits/deletes of `OrderStatusEvent`. `scripts/check-data.ts`: totals now include the delivery fee.
+- Docs: `PRODUCT.md`, `docs/ui-overhaul-plan.md`, `docs/data-model.md`, `docs/diagrams/erd.mmd` (new), `docs/scope.md` change log, `docs/deployment.md`, `docs/project-overview.md`, `docs/demo-runbook.md`, `AGENTS.md` known issues.
+
+**Why:** User asked for a fun, satisfying storefront and a fast, clear admin with the missing in-scope features made real (plan approved in `docs/ui-overhaul-plan.md`).
+
+**Impact:**
+- **Run `npx prisma migrate deploy` then `npx prisma db seed`** after restoring the paused Supabase project. Until then the storefront runs on the offline catalog with ordering paused and the admin shows an offline panel.
+- On Windows stop `npm run dev` before `npx prisma generate` (engine file lock).
+- The admin and the live checkout flow were not screenshot-reviewed (DB unreachable during the build); the impeccable finish review returned "recapture" for that reason. `DESIGN.md` is still the old unrelated template and should be regenerated from the built world (`/impeccable document`).
+- The scope change-log row is marked "Pending team agreement".
+
 ## 2026-10-10 — Expose Impeccable skill to Claude Code
 
 **What:** Created `.claude/skills/impeccable`, a directory junction pointing to `.agents/skills/impeccable`. No source files were copied or modified.

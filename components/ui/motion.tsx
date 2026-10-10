@@ -1,8 +1,14 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+
+const noopSubscribe = () => () => {};
+function useHydrated(): boolean {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
+}
 
 export const SPRING = { type: "spring", stiffness: 420, damping: 30 } as const;
 export const SPRING_SOFT = { type: "spring", stiffness: 260, damping: 26 } as const;
@@ -68,10 +74,11 @@ export function Odometer({ value, className = "" }: { value: string | number; cl
 function DigitColumn({ digit }: { digit: number }) {
   const reduce = useReducedMotion();
   return (
-    <span aria-hidden className="relative inline-block h-[1em] overflow-hidden">
-      <span className="invisible">0</span>
+    <span aria-hidden className="relative inline-block h-[1em] overflow-hidden text-center">
+      {/* Width follows the shown digit, so proportional fonts keep natural spacing. */}
+      <span className="invisible">{digit}</span>
       <motion.span
-        className="absolute inset-x-0 top-0 flex flex-col"
+        className="absolute inset-x-0 top-0 flex flex-col items-center"
         initial={false}
         animate={{ y: `${-digit}em` }}
         transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 300, damping: 28 }}
@@ -110,6 +117,7 @@ export function Sheet({
   const panelRef = useRef<HTMLDivElement>(null);
   const reduce = useReducedMotion();
   const wide = useMediaQuery("(min-width: 640px)");
+  const mounted = useHydrated();
 
   useEffect(() => {
     if (!open) return;
@@ -129,7 +137,9 @@ export function Sheet({
     };
   }, [open, onClose]);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50">
@@ -147,13 +157,13 @@ export function Sheet({
             aria-modal="true"
             aria-labelledby={titleId}
             tabIndex={-1}
-            className={`absolute inset-x-0 bottom-0 top-auto flex max-h-[92dvh] flex-col rounded-t-2xl bg-ice shadow-[var(--shadow-sheet)] outline-none sm:inset-y-0 sm:left-auto sm:right-0 sm:top-0 sm:max-h-none sm:w-full sm:rounded-none ${width}`}
+            className={`absolute inset-x-0 bottom-0 top-auto flex h-[88dvh] max-h-[92dvh] flex-col rounded-t-2xl bg-ice shadow-[var(--shadow-sheet)] outline-none sm:inset-y-0 sm:left-auto sm:right-0 sm:top-0 sm:h-full sm:max-h-none sm:w-full sm:rounded-none ${width}`}
             initial={reduce ? { opacity: 0 } : wide ? { x: "100%" } : { y: "100%" }}
             animate={reduce ? { opacity: 1 } : { x: 0, y: 0 }}
             exit={reduce ? { opacity: 0 } : wide ? { x: "100%" } : { y: "100%" }}
             transition={{ type: "spring", stiffness: 380, damping: 36 }}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-ice-3 px-5 pb-4 pt-5">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-ice-3 px-5 pb-4 pt-5">
               <div className="min-w-0">
                 <h2 id={titleId} className="text-lg font-bold text-ink">
                   {title}
@@ -162,29 +172,34 @@ export function Sheet({
               </div>
               <button
                 onClick={onClose}
-                className="-mr-1.5 -mt-1 grid size-9 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-ice-2 hover:text-ink"
+                className="-mr-1.5 -mt-1 grid size-9 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-ice-2 hover:text-ink cursor-pointer"
                 aria-label="Close"
               >
                 <X className="size-5" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
-            {footer && <div className="border-t border-ice-3 bg-paper px-5 py-4">{footer}</div>}
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 [scrollbar-width:thin] [scrollbar-color:var(--color-ice-3)_transparent]">{children}</div>
+            {footer && <div className="shrink-0 border-t border-ice-3 bg-paper px-5 py-4">{footer}</div>}
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 
 export function useMediaQuery(query: string): boolean {
-  const [match, setMatch] = useState(false);
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const update = () => setMatch(mql.matches);
-    update();
-    mql.addEventListener("change", update);
-    return () => mql.removeEventListener("change", update);
-  }, [query]);
-  return match;
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener("change", onStoreChange);
+      return () => mql.removeEventListener("change", onStoreChange);
+    },
+    [query]
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(query).matches,
+    () => false
+  );
 }

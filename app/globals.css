@@ -64,6 +64,16 @@
   50% { background-color: var(--color-marker); color: #fff; }
 }
 
+/* Hero price tags being jabbed into the ice: drop, overshoot, settle.
+   Pure CSS so it plays before hydration and never leaves a tag hidden. */
+@keyframes tag-drop {
+  0% { transform: translateY(-110px) rotate(var(--drop-from, -14deg)); }
+  55% { transform: translateY(10px) rotate(3deg); }
+  75% { transform: translateY(-4px) rotate(-1.5deg); }
+  90% { transform: translateY(1px) rotate(0.5deg); }
+  100% { transform: none; }
+}
+
 @keyframes strike {
   to { stroke-dashoffset: 0; }
 }
@@ -101,7 +111,7 @@ select {
   accent-color: var(--color-teal-deep);
 }
 
-:focus-visible {
+:focus-visible:not([data-no-outline]):not(.outline-none) {
   outline: 2.5px solid var(--color-teal-deep);
   outline-offset: 2px;
   border-radius: 6px;
@@ -155,11 +165,16 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   box-shadow: var(--shadow-tag), inset 0 0 0 1px rgb(120 84 36 / 0.22);
 }
 
-/* Logo-style sticker lettering: white keyline + drop, as in the wordmark. */
+/* Logo-style sticker lettering: white keyline + teal drop, as in the wordmark.
+   Built from stacked shadows (renders everywhere, unlike stroked text). */
 @utility sticker {
-  paint-order: stroke fill;
-  -webkit-text-stroke: 0.16em #fff;
-  text-shadow: 0.05em 0.07em 0 rgb(11 79 92 / 0.35);
+  --k: 0.075em;
+  text-shadow:
+    calc(var(--k) * -1) calc(var(--k) * -1) 0 #fff, var(--k) calc(var(--k) * -1) 0 #fff,
+    calc(var(--k) * -1) var(--k) 0 #fff, var(--k) var(--k) 0 #fff,
+    0 calc(var(--k) * -1.3) 0 #fff, 0 calc(var(--k) * 1.3) 0 #fff,
+    calc(var(--k) * -1.3) 0 0 #fff, calc(var(--k) * 1.3) 0 0 #fff,
+    0.09em 0.13em 0 #1d8197;
 }
 
 @utility skeleton {

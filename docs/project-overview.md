@@ -80,7 +80,7 @@ get bounced out.
 
 ## 4. How the information is organized (the database, in plain words)
 
-Everything is stored in a database. We split the information into **seven
+Everything is stored in a database. We split the information into **eight
 buckets** (the technical word is "models" or "entities"). Here's each one in
 everyday language:
 
@@ -93,9 +93,12 @@ everyday language:
    1kg" versus "Bangus, Boneless, 500g." **The price and stock live here**,
    because different cuts and sizes cost different amounts and sell separately.
 5. **StockMovement** — the ledger from Section 2. One row per stock change.
-6. **Order** — a customer's purchase: who bought, when, the status, and the
-   total.
+6. **Order** — a customer's purchase: who bought, when, the status, the total,
+   the delivery details and how they'll pay. People see it as a code like
+   **HB-0005**.
 7. **OrderItem** — a single line inside an order ("2 × Tilapia at ₱150 each").
+8. **OrderStatusEvent** — the order's timeline: one row each time its status
+   changes (who, when, and why). Like the ledger, it is never edited.
 
 ### How they relate
 
@@ -106,6 +109,7 @@ Read `1 → many` as "one of these has many of those":
 - One **User** has many **Orders**.
 - One **Order** has many **OrderItems**.
 - One **Variant** has many **StockMovements** and appears in many **OrderItems**.
+- One **Order** has many **OrderStatusEvents** (its timeline).
 
 ---
 
@@ -172,19 +176,36 @@ You don't need to code these, just recognize the names:
 - **NextAuth** — handles logging in and keeping you logged in.
 - **bcrypt** — scrambles passwords so they're never stored readable.
 - **Tailwind CSS** — the styling system that makes it look nice.
+- **Motion** — the animation library behind the springy, satisfying movement.
+- **Lucide** — the icon set (one consistent line style everywhere).
 - **Vercel** — the service that hosts our live website.
 
 ### What the site looks like (the visual style)
 
-The UI is built on an appetite-driven **Coastal Market** design system, combining maritime depth with fresh, appetite-stimulating culinary accents:
-- **Colors:** Deep Tide Ink (`#0E2931`) for crisp typography, Ocean Teal (`#1F7A8C`) and Coastal Foam (`#4ECDC4`) for brand authenticity, high-conversion Sea-Prawn Coral (`#FF5722`) for buy actions and urgency, Calamansi Citrus Gold (`#F59E0B`) for daily catch spotlights and ratings, and Warm Pearl Canvas (`#FAF8F5`) replacing sterile cold-blue backgrounds.
-- **Atmosphere & Surfaces:** Warm pearl surfaces with subtle coastal dock gradients, frosted glass elevation (`backdrop-blur-md`), and a live dawn dock ticker.
-- **Wet-Market Experience:** "Catch of the Day" hero spotlight with instant 1-click cart addition, dual species and culinary dish filtering (Sinigang, Inihaw, Ginataan, Kilawin), authentic "Linis & Kaliskis" (Free Cleaning & Scaling) preparation badges, and Fishmonger's Cold-Chain Quality Guarantees.
-- **Dockside Catch Basket:** A tactile seafood cooler experience replacing generic cart sidebars. Features a live dawn port batch header, cold-chain free-delivery progress tracker, rich catch cards with inline quantity steppers and prep selectors (Linis & Kaliskis, Whole, Sliced Steaks), thermal foam box trust cards, and an itemized tear-off order receipt. Hook & Box strictly specializes in pure fresh seafood with zero pantry clutter.
-- **Product Imagery & Iconography:** Resilient drop-in photography system supporting local high-resolution product photography in `/public/products/` with automatic high-craft SVG fallback illustrations. Clean, professional SVG vector iconography throughout with zero emojis.
-- **Micro-Animations & Tactile Motion:** Lightweight hardware-accelerated CSS keyframes and spring deceleration curves (`cubic-bezier(0.16, 1, 0.3, 1)`): tactile add-to-cart button pops (`✓ Added!`), navigation basket counter wiggles, living radar beacon on "Live on Ice" badges, smooth catalog filter cross-fades, spring-decelerated Catch Basket slide-over with stepper punches, and simulated receipt printer flash on new stock ledger entries. All motion strictly honors `prefers-reduced-motion`.
-- **Geometry & Rhythm:** Strict tight radius system (`2px` for badges, `4px` base for buttons/cards, `6px` for modals, and `9999px` status pills) adhering to a 4px layout cadence.
-- **Typography:** Display hierarchy uses Geist font with tight tracking, paired with monospace tabular representation for prices, order IDs, SKUs, and the load-bearing stock ledger.
+The whole site is styled as a **palengke price board** (overhauled 2026-10-10; see
+`docs/ui-overhaul-plan.md`):
+
+- **The idea:** every product is a hand-lettered **cardboard price card** stuck into
+  crushed ice on a bamboo stick: the species name in heavy sign-painter lettering,
+  the price in red marker. The basket is a teal plastic **basin**, a yellow **tarp
+  banner** scrolls today's prices across the top, and confirmations are **ink stamps**.
+- **Colors:** logo teal `#3CB3CA` and mint `#9FF0E3` (from the Hook & Box logo), tarp
+  yellow `#FFD23F`, marker red `#D7263D`, cardboard `#DCBD8E`, ice `#EEF6F8`, ink
+  `#13191C`. Each category keeps one color everywhere (Fish teal, Shellfish orange,
+  Crab red, Squid violet, Prepared green).
+- **Type:** Anton (heavy condensed sign lettering, matching the logo), Permanent
+  Marker (prices), Geist (everything you read).
+- **Photos:** real Unsplash photos of each species (`public/products/`, credits in
+  `docs/design/photo-credits.md`).
+- **Fun, with a job:** the product photo **arcs into the basket** when you tap Add and
+  the basket jiggles; price tags **drop into the ice** on load and straighten when you
+  hover; a **hanging scale's needle** swings when you pick 500g or 1kg; sold-out tags
+  get a **marker strike**; the free-delivery bar fills with ice, then gets stamped;
+  placing an order **prints a receipt** stamped "Thank you!". All motion respects the
+  "reduce motion" setting.
+- **Admin:** the same materials, kept calm and fast: a "Today" inbox of what needs
+  attention, ⌘K search for anything, keyboard shortcuts (press `?`), undo on every
+  change, and a bottom tab bar on phones.
 
 
 ### Why two database "addresses"?
@@ -203,13 +224,16 @@ If someone says "show me where X is," here's the map:
 
 | Folder / file | What's in it |
 |---|---|
-| `app/` | The website pages themselves. |
-| `app/page.tsx` | The current prototype screen (a single big file — being broken into real pages as we wire in the database). |
-| `prisma/schema.prisma` | The definition of those seven buckets. The single source of truth for the data. |
-| `prisma/seed.ts` | The script that fills the database with ~50 seafood products and demo accounts. This file doubles as our **backup**. |
+| `app/(shop)/` | The storefront pages: catch (`page.tsx`), product (`p/[id]`), checkout, track, account, login/register, about. |
+| `app/(admin)/admin/` | The staff admin: Today, orders, stock (walk-in / adjust / morning count), prices, products, categories, ledger. |
+| `components/` | The building blocks: `shop/` (basket, price cards, checkout), `admin/` (orders board, stock desk, ledger), `ui/` (buttons, price tag, stamp, toasts). |
+| `prisma/schema.prisma` | The definition of the eight buckets. The single source of truth for the data. |
+| `prisma/seed.ts` | Fills the database with the catalog, demo accounts and a believable week of orders and stock history. This file doubles as our **backup**. |
+| `lib/catalog-data.ts` | The catalog itself (names, prices, photos, dishes), shared by the seed and the offline fallback. |
+| `lib/catalog.ts` / `lib/admin-data.ts` | Read the data for the storefront and the admin; stock is always the sum of the ledger. |
+| `lib/actions/` | Everything that changes data (checkout, order status, stock, prices, products) — each stock change is a new ledger row. |
 | `lib/prisma.ts` | The one safe way our code talks to the database. |
-| `lib/products.ts` | Fetches products for the storefront and calculates stock by adding up the ledger. |
-| `auth.ts` / `auth.config.ts` | The login and role-checking logic. |
+| `auth.ts` / `auth.config.ts` / `proxy.ts` | Login, roles, and the gate that keeps customers out of `/admin`. |
 | `docs/` | All the documentation, including this file. |
 
 ---
@@ -223,11 +247,12 @@ The full script is in `docs/demo-runbook.md`. The short version:
 2. **Log in as admin.** *"Access is role-based — staff only."*
 3. **Create or edit a product,** then show it change on the storefront.
    *"Prices are whole-number centavos, so no rounding errors."*
-4. **Adjust stock with a reason, then open the stock history (the Ledger tab).**
-   This is the star moment — show the ledger, styled like a **receipt tape** with
-   additions in teal and removals in coral and a running balance. *"Every change
-   is recorded with a reason and time; we correct mistakes by adding a line,
-   never editing one."*
+4. **Record a walk-in sale or a stock adjustment with a reason, then open the
+   Stock ledger.** This is the star moment — the new entry sits on top with its
+   reason, who did it, and that item's running balance; click an item to dim
+   every other row. Then press **Counter** on an entry. *"Every change is
+   recorded with a reason and time; we correct mistakes by adding a line, never
+   editing one."*
 5. **Show the `docs/` folder** — scope, diagrams, requirements.
 6. **Close:** state what's built, what's next, and what's intentionally left out.
 

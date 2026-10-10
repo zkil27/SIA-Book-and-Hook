@@ -81,8 +81,9 @@ const RULES: Rule[] = [
     description:
       "Products/variants are soft-deleted (active=false), never hard-deleted — orders reference them.",
     fix: "Set `active: false` via update instead of calling delete/deleteMany.",
+    // `tx.` covers interactive-transaction clients as well as the singleton.
     test: (line) =>
-      /\bprisma\.(product|productVariant)\.deleteMany?\s*\(/.test(line),
+      /\b(prisma|tx)\.(product|productVariant)\.deleteMany?\s*\(/.test(line),
   },
   {
     id: "delete-stock-movement",
@@ -90,7 +91,17 @@ const RULES: Rule[] = [
       "The StockMovement ledger is append-only — never edit or delete a row; correct with a compensating movement.",
     fix: "Insert a new compensating StockMovement instead of update/delete.",
     test: (line) =>
-      /\bprisma\.stockMovement\.(delete|deleteMany|update|updateMany)\s*\(/.test(
+      /\b(prisma|tx)\.stockMovement\.(delete|deleteMany|update|updateMany|upsert)\s*\(/.test(
+        line
+      ),
+  },
+  {
+    id: "edit-order-status-event",
+    description:
+      "OrderStatusEvent is the append-only order timeline — never edit or delete a row; record a new event (e.g. an Undo).",
+    fix: "Create a new OrderStatusEvent instead of update/delete.",
+    test: (line) =>
+      /\b(prisma|tx)\.orderStatusEvent\.(delete|deleteMany|update|updateMany|upsert)\s*\(/.test(
         line
       ),
   },

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Menu, Search, User, X } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
@@ -21,8 +21,15 @@ export function ShopHeader({ user }: { user: { name: string | null; role: "ADMIN
   const [q, setQ] = useState(params.get("q") ?? "");
   const [menu, setMenu] = useState(false);
 
-  useEffect(() => setQ(params.get("q") ?? ""), [params]);
-  useEffect(() => setMenu(false), [pathname]);
+  // Keep the search box in sync with the URL and close the menu on navigation
+  // (reset during render rather than in an effect).
+  const urlQ = params.get("q") ?? "";
+  const [seen, setSeen] = useState({ urlQ, pathname });
+  if (seen.urlQ !== urlQ || seen.pathname !== pathname) {
+    setSeen({ urlQ, pathname });
+    setQ(urlQ);
+    setMenu(false);
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -52,7 +59,8 @@ export function ShopHeader({ user }: { user: { name: string | null; role: "ADMIN
   );
 
   return (
-    <header className="sticky top-0 z-40 border-b border-ice-3 bg-ice/90 backdrop-blur-md">
+    <>
+      <header className="sticky top-0 z-40 border-b border-ice-3 bg-ice/90 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">
         <Logo size="sm" />
         <nav className="ml-4 hidden items-center gap-1 lg:flex" aria-label="Main">
@@ -121,7 +129,8 @@ export function ShopHeader({ user }: { user: { name: string | null; role: "ADMIN
           </motion.nav>
         )}
       </AnimatePresence>
-      <BasketSheet />
     </header>
-  );
+    <BasketSheet />
+  </>
+);
 }

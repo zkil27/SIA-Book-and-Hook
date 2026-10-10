@@ -1,6 +1,6 @@
 # UI Overhaul Plan — "Palengke Price Board"
 
-**Status:** Draft for approval · 2026-10-10
+**Status:** Approved and implemented · 2026-10-10 (see "Built vs plan" at the end)
 **Covers:** storefront `(shop)` and admin `(admin)`, end to end.
 **Product context:** [`PRODUCT.md`](../PRODUCT.md). **Direction contract:** `.impeccable/surfaces/app-shop-page-tsx.md`.
 
@@ -143,3 +143,20 @@ Every phase ends with entries in `docs/changelog.md` and updates to the affected
 - Final display and marker faces, picked from rendered trials in Phase 0.
 - Checkout requires login (`Order.customerId` is required). The flow lets a guest register inline at the delivery step.
 - `docs/scope.md`: no feature leaves scope, but the change log should record the new schema fields and the four admin flows as in-scope implementations.
+
+---
+
+## 10. Built vs plan (2026-10-10)
+
+Everything in §§4–7 was built, with these deliberate differences:
+
+- **Logo colors win over the palette:** the existing Hook & Box logo is teal `#3CB3CA` + mint `#9FF0E3`, so the basket/brand blue became the logo teal instead of `#1E5EFF`. Tarp yellow, marker red, cardboard, ice and ink are as planned.
+- **Faces:** Anton (sign lettering, matches the wordmark), Permanent Marker (prices), Geist (UI).
+- **Category filter** lives in the URL as `/?c=fish` (and `?dish=`, `?q=`) instead of a separate `/c/[slug]` route. Same behavior, one page.
+- **Contact** is merged into About (`/contact` redirects to `/about#contact`); the old non-working "send message" form was dropped (no email in scope).
+- **Prep selector** ("Cleaned & Scaled / Whole / Steaks") was dropped from the basket: orders have no field to store it, so it was a choice that silently disappeared. Cleaning is stated as free instead.
+- **Variants get their own `active` flag** (not in the original §3 list) so one size can come off sale without archiving the product.
+- **Order code** is an auto-increment `orderNumber` displayed as `HB-0005`, not a stored string.
+- **Seeded staff:** a second staff account (`clerk@hookandbox.ph`) so the ledger shows more than one person.
+
+Open: the finish review could not complete while Supabase is paused. The admin and the live checkout flow have only been checked from source and type checks, not by screenshot. Restore the database, apply the migration and reseed, then capture those screens.
