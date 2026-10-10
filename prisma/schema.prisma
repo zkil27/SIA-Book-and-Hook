@@ -21,15 +21,22 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum PaymentMethod {
+  GCASH
+  COD
+}
+
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  passwordHash  String
-  role          Role      @default(CUSTOMER)
-  orders        Order[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String             @id @default(cuid())
+  name           String?
+  email          String             @unique
+  passwordHash   String
+  role           Role               @default(CUSTOMER)
+  orders         Order[]
+  stockMovements StockMovement[] // movements this staff member recorded
+  statusEvents   OrderStatusEvent[] // status changes this staff member made
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 }
 
 model Category {
@@ -43,6 +50,7 @@ model Product {
   id          String           @id @default(cuid())
   name        String
   description String?
+  imageUrl    String? // Static path under /public (no uploads), e.g. "/products/bangus.jpg"
   categoryId  String
   category    Category         @relation(fields: [categoryId], references: [id])
   active      Boolean          @default(true) // Soft-delete
@@ -52,44 +60,77 @@ model Product {
 }
 
 model ProductVariant {
-  id             String           @id @default(cuid())
+  id             String          @id @default(cuid())
   productId      String
-  product        Product          @relation(fields: [productId], references: [id])
-  name           String           // e.g., "500g", "Whole"
-  sku            String           @unique
-  priceCentavos  Int              // Stored as Int centavos
+  product        Product         @relation(fields: [productId], references: [id])
+  name           String // e.g., "500g", "Whole"
+  sku            String          @unique
+  priceCentavos  Int // Stored as Int centavos
+  priceUpdatedAt DateTime? // Last price change; drives the "changed today" flag
+  active         Boolean         @default(true) // Soft-delete a single variant
   stockMovements StockMovement[]
   orderItems     OrderItem[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 model StockMovement {
   id        String         @id @default(cuid())
   variantId String
   variant   ProductVariant @relation(fields: [variantId], references: [id])
-  quantity  Int            // Positive for additions, negative for reductions
-  reason    String         // e.g., "Sale", "Spoilage", "Restock"
+  quantity  Int // Positive for additions, negative for reductions
+  reason    String // e.g., "Sale — HB-0005", "Spoilage", "Restock"
+  orderId   String? // Set when an order caused the movement
+  order     Order?         @relation(fields: [orderId], references: [id])
+  actorId   String? // Staff member who recorded it (null for system/seed)
+  actor     User?          @relation(fields: [actorId], references: [id])
   createdAt DateTime       @default(now()) // Append-only ledger
+
+  @@index([variantId, createdAt])
 }
 
 model Order {
-  id            String      @id @default(cuid())
-  customerId    String
-  customer      User        @relation(fields: [customerId], references: [id])
-  status        OrderStatus @default(PENDING)
-  totalCentavos Int         // Calculated total in centavos
-  items         OrderItem[]
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id                  String             @id @default(cuid())
+  orderNumber         Int                @unique @default(autoincrement()) // Shown as "HB-0005"
+  customerId          String
+  customer            User               @relation(fields: [customerId], references: [id])
+  status              OrderStatus        @default(PENDING)
+  paymentMethod       PaymentMethod
+  deliveryName        String
+  deliveryPhone       String
+  deliveryAddress     String
+  deliveryBarangay    String
+  deliverySlot        String // e.g. "6:00–8:00 AM"
+  deliveryFeeCentavos Int                @default(0)
+  totalCentavos       Int // Items + delivery fee, in centavos
+  items               OrderItem[]
+  statusEvents        OrderStatusEvent[]
+  stockMovements      StockMovement[]
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 }
 
 model OrderItem {
-  id             String         @id @default(cuid())
-  orderId        String
-  order          Order          @relation(fields: [orderId], references: [id])
-  variantId      String
-  variant        ProductVariant @relation(fields: [variantId], references: [id])
-  quantity       Int
-  priceAtTime    Int            // Captured price in centavos at time of order
+  id          String         @id @default(cuid())
+  orderId     String
+  order       Order          @relation(fields: [orderId], references: [id])
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  quantity    Int
+  priceAtTime Int // Captured price in centavos at time of order
+}
+
+// Append-only order timeline: one row per status change. Never edited/deleted.
+model OrderStatusEvent {
+  id         String       @id @default(cuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id])
+  fromStatus OrderStatus? // null for the creation event
+  toStatus   OrderStatus
+  note       String? // e.g. cancellation reason
+  actorId    String?
+  actor      User?        @relation(fields: [actorId], references: [id])
+  createdAt  DateTime     @default(now())
+
+  @@index([orderId, createdAt])
 }

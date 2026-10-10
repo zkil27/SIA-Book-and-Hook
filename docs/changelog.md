@@ -5,6 +5,14 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-10-10 — Expose Impeccable skill to Claude Code
+
+**What:** Created `.claude/skills/impeccable`, a directory junction pointing to `.agents/skills/impeccable`. No source files were copied or modified.
+
+**Why:** Claude Code only discovers project skills under `.claude/skills/`, so `/impeccable` was unavailable while the skill lived only in `.agents/skills/`.
+
+**Impact:** `/impeccable` is available after restarting Claude Code. The junction is machine-local (Windows `mklink /J`); on a fresh clone, recreate it with `cmd /c mklink /J ".claude\skills\impeccable" ".agents\skills\impeccable"`. Consider not committing `.claude/skills/impeccable`.
+
 ## 2026-10-01 — Enforce Pure Seafood Catalog and Zero Emoji Standard
 
 **What:** Enforced pure seafood product boundaries and eliminated all emojis across the storefront:
