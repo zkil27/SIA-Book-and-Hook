@@ -5,7 +5,153 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
----
+## 2026-10-01 — Enforce Pure Seafood Catalog and Zero Emoji Standard
+
+**What:** Enforced pure seafood product boundaries and eliminated all emojis across the storefront:
+- `app/StoreApp.tsx`:
+  - Removed all food emojis (`🍲`, `🔥`, `🥥`, `🍋`) from the culinary recipe filter pills, keeping clean, professional text labels (`Sinigang Catch`, `Inihaw / Grill`, `Ginataan Special`, `Kilawin Fresh`).
+  - Replaced the ice emoji (`🧊`) in the cold-chain progress bar with an `IcSnowflake` SVG vector badge.
+  - Strictly enforced product boundary by removing the `Palengke Kitchen Essentials` upsell block (which offered non-seafood pantry aromatics and salt packs).
+  - Cleaned up cart item rendering, removing `isPantry` checks so all items are treated as authentic fresh seafood with wet-market prep selections (`Cleaned & Scaled`, `Whole Fresh`, `Sliced Steaks`).
+  - Replaced `Palengke Kitchen Essentials` with prominent Thermal Cold-Lock Packaging reassurance card.
+- `docs/project-overview.md`:
+  - Updated storefront and visual style specifications to document pure seafood scope and zero-emoji UI standards.
+- `docs/changelog.md`:
+  - Added this entry.
+
+**Why:** User explicitly requested: "remove emoji. also we dont sell anything except sea foods".
+
+**Impact:** Eliminates non-seafood scope creep, keeping Hook & Box strictly focused on fresh Cavite seafood. Polishes UI aesthetics by swapping informal Unicode emojis for crafted SVG vector iconography.
+
+## 2026-10-01 — Add Site-Wide Micro-Animations & Tactile Micro-Interactions
+
+**What:** Implemented a comprehensive motion and tactile interaction system across storefront and checkout:
+- `app/globals.css`:
+  - Added spring and smooth motion variables (`--ease-spring`, `--ease-smooth`, `--ease-bounce`).
+  - Added keyframes: `basketWiggle`, `popScale`, `floatBadge`, `slideInDrawer`, `fadeInBackdrop`, `radarPing`, `shimmerGlow`, `gridFadeIn`, `ledgerReceiptFlash`.
+  - Added utility classes: `.anim-basket-wiggle`, `.anim-pop`, `.anim-drawer-slide`, `.anim-backdrop-fade`, `.anim-radar`, `.anim-grid-fade`, `.anim-gold-pulse`, `.anim-receipt-flash`, `.interactive-press`.
+  - Preserved strict `@media (prefers-reduced-motion: reduce)` accessibility overrides.
+- `app/StoreApp.tsx`:
+  - **Add-to-Basket Micro-Interaction:** Button pops (`scale-95` to `scale-100`) and transitions to `✓ Added!` with an emerald badge for 1200ms upon item addition.
+  - **Catch Basket Counter Bounce:** The navigation bar's Catch Basket button wiggles (`anim-basket-wiggle`) and the item count badge spring-pops when items are added.
+  - **Dawn Dock Ticker Radar Beacon:** Pulse beacon with concentric wave radar ping on the live port arrival indicator.
+  - **Catch of the Day Spotlight:** Ambient golden aura sweep (`anim-gold-pulse`), living radar ping on the "Live on Ice" badge, and hover elevation.
+  - **Catalog Filter Transitions:** Category and cooking recipe filter pills feature tactile spring presses (`active:scale-95`), and the catalog grid smoothly cross-fades and lifts (`anim-grid-fade`) when filters change.
+  - **Catch Basket Drawer Choreography:** Backdrop smooth fade-in (`anim-backdrop-fade`) and container spring slide-over (`anim-drawer-slide`), quantity steppers with `active:scale-90` punches, trash button tilt on hover, and active prep chip toggles.
+  - **Checkout Transitions:** Payment method cards (GCash vs COD) feature active scale press and ring glow with `anim-pop`, and the order confirmation receipt enters with a spring checkmark.
+  - **Stock Movement Ledger Flash:** Newest ledger rows highlight with a simulated receipt printer flash (`anim-receipt-flash`).
+- `docs/project-overview.md`: Documented the micro-animations and micro-interactions in the visual style section.
+
+**Why:** User requested to add micro-animations and micro-interactions throughout the website because it felt static and "dead".
+
+**Impact:** Transforms static pages into an alive, tactile, and responsive coastal market experience. Increases shopping confidence and tactile satisfaction without adding external runtime dependencies or slowing down page performance.
+
+## 2026-10-01 — Redesign Catch Basket into Dockside Cold-Box & Market Slip
+
+**What:** Replaced the generic and sterile shopping cart slide-over with an authentic, appetite-stimulating **Dockside Catch Basket**:
+- `app/StoreApp.tsx`:
+  - **Dockside Pier Batch Header:** Deep tide gradient banner (`#0E2931` to `#1F7A8C`) with real-time port dispatch indicator and catch counter pill.
+  - **Cold-Chain & Free Delivery Progress Bar:** Gamified progress tracker informing customers how close they are to unlocking Free Insulated Cold-Box Same-Day Delivery to Dasmariñas City (`₱500` threshold).
+  - **Rich Seafood Catch Cards:**
+    - High-detail 64×64 thumbnail powered by `ProductImage` (with Banana Pro photo or craft vector illustration fallback) replacing the generic blue outline icon.
+    - **Fishmonger Prep Selector Chips:** Interactive 1-tap toggles right on each item (`Linis & Kaliskis`, `Whole Fresh`, `Sliced Steaks`) utilizing new `updateCartPrep` helper.
+    - **Tactile Quantity Stepper:** `[-]` `qty` `[+]` controls with `updateCartQty` allowing customers to adjust weights and portions directly in the basket.
+    - Direct item removal with `IcTrash` and clear line totals in coral.
+  - **Palengke Kitchen Essentials (Add-on Upsells):** 3 quick-add pantry pairings (Fresh Calamansi Pack ₱35, Sinigang Aromatics Bundle ₱45, Sea Salt & Garlic ₱25) that stimulate culinary appetite, fill empty basket space, and boost average order value.
+  - **Cold-Lock Thermal Packaging Trust Card:** Visual reassurance highlighting food-grade styro-lock and crushed sea ice insulation.
+  - **Perforated Dockside Receipt Footer:** Tear-off receipt layout with itemized fee transparency (Linis & Kaliskis `FREE`, Insulated Box `FREE`, Lalamove Courier `FREE` or `₱50`), bold coral total, and high-visibility checkout button.
+  - Mirrored the free prep and cold-box line items in `PaymentView` order summary sidebar for end-to-end consistency.
+- `docs/project-overview.md`: Documented the Dockside Catch Basket features in the visual style & storefront overview.
+
+**Why:** User flagged that the existing cart drawer felt generic and unappealing, requesting a new design and layout with more personality and character for the "catch basket".
+
+**Impact:** Transforms a sterile e-commerce drawer into a sensory, high-conversion wet-market packing experience. Solves dead vertical whitespace, adds quantity and preparation controls, and encourages larger basket sizes with kitchen add-ons while strictly preserving integer centavos and scope boundaries.
+
+## 2026-10-01 — Coastal Market Visual Overhaul & Appetite-Driven UI Redesign
+
+**What:** Redesigned the storefront layout, color balance, and sensory shopping experience to address cold, generic, unappealing UI and stimulate culinary appetite:
+- `app/globals.css`: Shifted from an all-blue monochromatic scheme to a balanced, high-conversion **Coastal Market** palette:
+  - Preserved brand oceanic depth with Ocean Teal (`--primary #1F7A8C`) and Coastal Foam (`--brand-cyan #4ECDC4`).
+  - Added culinary accents: Sea-Prawn Coral (`--coral #FF5722`) for CTAs and conversion elements, Calamansi Citrus Gold (`--gold #F59E0B`) for catch spotlights and reviews.
+  - Replaced cold surfaces with Warm Pearl Canvas (`--background #FAF8F5`) and ultra-crisp Deep Tide Ink (`--ink #0E2931`).
+  - Added dock ticker and badge animations (`dockTicker`, `scale-up`).
+- `app/StoreApp.tsx`:
+  - **Dawn Dock Ticker:** Header banner broadcasting real-time fish port arrival updates (`● Docked 5:30 AM · Cavite Fish Port · Packed on Ice · Direct to Dasmariñas`).
+  - **Catch of the Day Hero Spotlight:** Prominent daily fresh catch feature card (Dagupan Milkfish) with immediate 1-click cart addition.
+  - **Dual Navigation / Culinary Filters:** Added recipe intent pills (Sinigang, Inihaw, Ginataan, Kilawin) alongside species category filters (All, Fish, Crustaceans, Shellfish, Cephalopods).
+  - **Philippine Wet-Market Preparation Badges:** Added authentic service badges to product cards ("Linis & Kaliskis", "Buhay / Live Catch").
+  - **Drop-In Photography System:** Implemented resilient `ProductImage` component supporting drop-in Banana Pro images in `/public/products/` (`bangus.jpg`, `prawns.jpg`, `crab.jpg`, `squid.jpg`, `tilapia.jpg`, `salmon.jpg`) with automatic graceful fallback to high-craft SVG cards.
+  - **Mobile Sticky Cart Bar:** Added mobile-friendly quick checkout launcher pill showing live item count and total.
+  - **Fishmonger's Quality Guarantee:** Added 3-pillar trust section (Dusk-to-Dawn Cold Chain, Cavite Local Port First-Pick, Linis & Kaliskis on the house).
+- `public/products/`: Created directory for user-generated Banana Pro seafood photography.
+- `docs/project-overview.md`: Updated the visual style section to describe the Coastal Market design tokens and sensory wet-market shopping features.
+
+**Why:** User requested to overhaul the layout and color scheme because the previous design was "too blue", felt generic, and was unappealing to shoppers, requesting more personality, appetite-stimulating colors to drive purchases, and Banana Pro image generation prompts.
+
+**Impact:** Storefront now stimulates culinary appetite with warm coral CTAs and calamansi gold spotlights while maintaining maritime authority. Drop-in asset support is ready for generated images. All non-negotiables (integer centavos, append-only ledger, soft deletes, 70/30 checkout split) remain strictly enforced.
+
+## 2026-10-01 — Overhaul UI to Aura Intelligent Hub design system
+
+**What:** Complete visual and surface overhaul across storefront and admin interfaces aligning with the Aura Intelligent Hub design system defined in `DESIGN.md`:
+- `app/globals.css`: Replaced legacy brutalist CSS overrides and generous 14px-20px rounding with Aura design tokens. Defined signature blue palette (`--primary #34A6BD`, `--brand-cyan #58C6DB`, `--brand-deep #1C6E80`, `--brand-ink #103A45`, `--secondary #F43F5E`, `--tertiary #F59E0B`, `--neutral #000000`), glass utilities (`backdrop-blur-md` 12px), hairline gradient shells, and tight radius variables (`--radius-xs 2px`, `--radius-sm 4px`, `--radius-md 6px`, `--radius-pill 9999px`). Added browser surface theming for text selection, custom sleek scrollbars, and focus rings.
+- `app/StoreApp.tsx`:
+  - Added non-blocking `AtmosphericCanvas` component rendering a full-bleed dot-matrix particle field and slow breathing pulse with DOM fallback.
+  - Refactored core primitives (`Btn`, `Card`, `Tag`, `FieldInput`, `Divider`, `ImgFrame`, `BrandLogo`) with Aura glass surfaces, 4px tight radius, and unified Solar/Linear iconography.
+  - Redesigned Storefront (`ClientView`): modern maritime gradient hero, live wet catch badge, glass search and 4px category filter pills, glass product cards with variant selectors, and slide-over glass cart drawer.
+  - Redesigned Multi-Step Checkout (`PaymentView`): preserved the established 70/30 layout split and natural content height while styling with glass step indicators, payment selector cards (COD / GCash), and reassurance notes (`CheckoutNotes`).
+  - Redesigned Admin Panel (`AdminView`, `StockLedger`, `AddProductModal`): deep teal chrome header, glass KPI metric cards, inventory table with live filter bar, full-width append-only Stock Movement Ledger with running balances, and multi-variant product creation modal.
+  - Redesigned Order Tracking (`TrackOrderView`), About (`AboutView`), and Contact (`ContactView`).
+- `docs/project-overview.md`: Updated the visual style section to describe the Aura design system tokens, glass elevation, and atmospheric canvas.
+
+**Why:** User requested to overhaul the UI with the newly implemented design system (`DESIGN.md`).
+
+**Impact:** Modern, high-craft maritime application interface conforming to `DESIGN.md` and `craft-floor.md`. Frozen project scope, append-only ledger logic, integer centavos money handling, and 70/30 checkout layout reference rules are fully preserved.
+
+## 2026-10-01 — Add Git LFS hooks to custom githooks directory and push pending LFS objects
+
+**What:** Added Git LFS integration hooks (`pre-push`, `post-checkout`, `post-commit`, `post-merge`) into `githooks/` and uploaded all pending LFS objects via `git lfs push origin --all`.
+- `githooks/pre-push` ensures git push automatically uploads LFS-tracked assets (e.g. binaries, images) before sending commits to GitHub.
+- `githooks/post-checkout`, `post-commit`, and `post-merge` maintain LFS pointer synchronization.
+- Resolved remote rejection `GH008: Your push referenced at least 1 unknown Git LFS object` and pushed all commits cleanly to `origin/dev`.
+
+**Why:** Because the repository configures `core.hooksPath` to `githooks`, default `.git/hooks/` were bypassed, causing `git push` in IDEs/GUIs to omit automatic Git LFS object uploads and trigger remote pre-receive rejection errors.
+
+**Impact:** Future `git push` commands (via terminal or IDE UI) will automatically handle Git LFS binary uploads without remote pre-receive hook rejections.
+
+## 2026-10-01 — Purge redundant AI agent directories, duplicate skills, and dead assets
+
+**What:** Cleaned up redundant AI tooling directories, duplicated skills, and transient artifacts across the repo:
+- Removed duplicate tool-specific folders: `.claude/`, `.codex/`, `.devin/`.
+- Cleaned up duplicated skills and tool hooks from `.cursor/` (`agents/`, `hooks.json`, `skills/` removed; preserved `rules/project.mdc`), `.kiro/` (`skills/` removed; preserved `hooks/` and `steering/`), and `.github/` (`agents/`, `hooks/`, `skills/` removed; preserved CI `workflows/` and PR template).
+- Removed redundant copies of `impeccable` (reclaiming ~64 MB of duplicate Windows `.exe` binaries across 4 folders), retaining the single canonical copy in `.agents/skills/impeccable/`.
+- Deleted unused `@prisma/composer` skill (`.agents/skills/prisma-composer/`) as standard Prisma is used.
+- Removed transient planning document `plans/what-can-u-recommend-sunny-lagoon.md` and scratch artifact `font-input.json`.
+- Updated `README.md`, `AGENTS.md`, `.cursor/rules/project.mdc`, and `.windsurfrules` to reflect canonical skill locations in `.agents/skills/` and remove obsolete references to `@prisma/composer`.
+
+**Why:** User requested removal of redundant AI bloat and files after skill installation broadcasted identical skills, executables, and hooks across multiple IDE agent directories.
+
+**Impact:** Reclaimed over 64 MB of repository disk space and eliminated ~240 duplicate files and dead-weight configs, keeping `.agents/` as the single canonical workspace skill root without impacting application runtime, schema, or tests.
+
+## 2026-10-01 — Add project DESIGN.md adapted with signature blue palette
+
+**What:** Added `DESIGN.md` in the project root defining the Aura Intelligent Hub design system specification.
+- Configured tokens for colors, typography (Geist + System Font), layout (flex, full bleed, 4px base rhythm), elevation/depth (glass, hairline border shell), shapes (2px/4px/6px tight radius), components (primary/link buttons, card surfaces), motion rules, and WebGL atmospheric background.
+- Adapted the primary and accent colors from the template's `#10B981` to Hook & Box's signature brand blue / teal (`#34A6BD`), along with brand supporting tokens (`#58C6DB` cyan, `#1C6E80` deep teal, and `#103A45` ink).
+
+**Why:** User requested to add the Aura design system specification as the project's design system while preserving Hook & Box's signature blue brand color.
+
+**Impact:** `impeccable context` and other AI design tools now resolve `DESIGN.md` as the normative design authority for styling and UI generation.
+
+## 2026-10-01 — Install Impeccable design skills and toolsets across AI agents
+
+**What:** Installed `impeccable` design skill suite across project agent environments (`.agents`, `.claude`, `.cursor`, `.github`, `.kiro`) using `npx impeccable install --project -y`.
+- Added skill definitions (`SKILL.md`), design command playbooks and references (`reference/`), scripts and CLI binaries (`scripts/bin/windows-x64/impeccable.exe`) to `.agents/skills/impeccable/`, `.claude/skills/impeccable/`, `.cursor/skills/impeccable/`, `.github/skills/impeccable/`, and `.kiro/skills/impeccable/`.
+- Configured agent hooks and definitions in `.claude/settings.local.json`, `.cursor/hooks.json`, `.github/hooks/impeccable.json`, `.codex/hooks.json`, and agent profiles in `.claude/agents/`, `.cursor/agents/`, and `.github/agents/`.
+- Updated `README.md` to document the new `impeccable` design skill alongside `frontend-design` and `hookandbox-stack`.
+
+**Why:** User requested to install `impeccable` to equip AI coding agents with a structured UI/UX design workflow, anti-pattern detection, design audit, and styling polish tools.
+
+**Impact:** AI assistants (Antigravity, Claude Code, Cursor, Copilot, Kiro) now have access to `/impeccable` commands (`init`, `critique`, `audit`, `polish`, `bolder`, `quieter`, `typeset`, etc.) and anti-pattern detectors for frontend refinement. No changes to database schema or application runtime logic.
 
 ## 2026-10-10 — Reformat FIFO sale queue for readability
 
