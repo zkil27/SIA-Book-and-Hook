@@ -5,6 +5,33 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-10-10 — Migrate web images from Git LFS to native Git blobs for Vercel deployment
+
+**What:**
+- Removed web image formats (`*.png`, `*.jpg`, `*.jpeg`, `*.gif`, `*.ico`, `*.webp`) from Git LFS filtering rules in `.gitattributes`.
+- Renormalized all static image assets in `public/` (`public/products/`, `public/scenes/`, `public/imports/`) into standard Git binary blob objects.
+- Retained Git LFS only for large raw design files (`*.psd`, `*.ai`, `*.sketch`) and binaries.
+
+**Why:** Vercel does not pull Git LFS objects by default during build/clone, causing Vercel to serve 131-byte text pointer files as `image/jpeg` which broke all product and hero image displays in the live deployment.
+
+**Impact:** All product photos, category imagery, and hero scenes now deploy and render natively on Vercel and any static hosting target with zero LFS configuration or GitHub monthly LFS bandwidth quotas.
+
+
+
+## 2026-10-10 — Refactor admin walk-in sale POS grid to species-grouped quick-tap cards
+
+**What:**
+- Refactored `WalkInMode` counter sales grid in `components/admin/StockDesk.tsx` (`/admin/stock?mode=walkin`) from flat variant cards into species-grouped `ProductGroup` tiles, eliminating duplicate product photo repetition across sibling cuts/weights.
+- Removed arbitrary `w-1` left-edge vertical color accent stripe on card thumbnails (a craft anti-pattern), replacing it with crisp semantic category chips (`Crab`, `Fish`, `Shellfish`) tinted with category palette hues.
+- Replaced flat card triggers with tactile quick-tap variant POS buttons directly inside multi-variant cards (e.g. `1kg · ₱680 (18)` vs `Jumbo 1.5kg · ₱980 (12)`), enabling 1-tap counter sales with zero modal navigation overhead.
+- Added sibling variant switcher chips inside the walk-in sale `Sheet` modal, allowing cashiers to seamlessly switch cuts or package sizes without leaving the active transaction sheet.
+- Restyled cards with clean typography (local Tagalog name prominent, English name subtitled), stock pills, and sold-out states.
+
+**Why:** User requested to fix AI slop in the admin walk-in sale grid where clone tiles with duplicate photos and generic border stripes degraded the POS cashier experience.
+
+**Impact:** Clean, compact, palengke-grade counter sales desk with zero card duplication and instant 1-tap variant selection.
+
+
 ## 2026-10-10 — Enable customer self-service cancellation for orders not yet in delivery
 
 **What:**

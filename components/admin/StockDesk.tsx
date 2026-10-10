@@ -300,14 +300,60 @@ function PickerSearch({ q, setQ }: { q: string; setQ: (s: string) => void }) {
 
 // ── Walk-in sale ────────────────────────────────────────────────────────────
 
+type ProductGroup = {
+  id: string;
+  name: string;
+  localName: string;
+  englishName: string | null;
+  image: string | null;
+  category: { name: string; slug: string };
+  variants: DeskVariant[];
+  totalStock: number;
+};
+
 function WalkInMode({ variants, initialId }: { variants: DeskVariant[]; initialId: string | null }) {
   const toast = useToast();
   const [q, setQ] = useState("");
   const [id, setId] = useState<string | null>(initialId);
   const [qty, setQty] = useState(1);
   const [pending, start] = useTransition();
-  const list = useFilter(variants, q);
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, ProductGroup>();
+    for (const item of variants) {
+      let g = map.get(item.product.id);
+      if (!g) {
+        const { local, english } = splitName(item.product.name);
+        g = {
+          id: item.product.id,
+          name: item.product.name,
+          localName: local,
+          englishName: english,
+          image: item.product.image,
+          category: item.product.category,
+          variants: [],
+          totalStock: 0,
+        };
+        map.set(item.product.id, g);
+      }
+      g.variants.push(item);
+      g.totalStock += Math.max(0, item.stock);
+    }
+    return [...map.values()];
+  }, [variants]);
+
+  const list = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return grouped;
+    return grouped.filter(g =>
+      g.name.toLowerCase().includes(s) ||
+      g.category.name.toLowerCase().includes(s) ||
+      g.variants.some(x => x.name.toLowerCase().includes(s) || x.sku.toLowerCase().includes(s))
+    );
+  }, [grouped, q]);
+
   const v = variants.find(x => x.id === id) ?? null;
+  const siblings = v ? variants.filter(x => x.product.id === v.product.id) : [];
 
   function sell() {
     if (!v) return;
@@ -332,36 +378,119 @@ function WalkInMode({ variants, initialId }: { variants: DeskVariant[]; initialI
       <div className="max-w-md">
         <PickerSearch q={q} setQ={setQ} />
       </div>
-      <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {list.map(x => {
-          const out = x.stock <= 0;
-          const hue = categoryHue(x.product.category.slug);
+      <ul className="mt-4 grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {list.map(p => {
+          const hue = categoryHue(p.category.slug);
+          const allOut = p.totalStock <= 0;
+          const hasMultiple = p.variants.length > 1;
+          const firstInStock = p.variants.find(x => x.stock > 0) ?? p.variants[0];
+
           return (
-            <li key={x.id}>
-              <button
-                disabled={out}
-                onClick={() => {
-                  setId(x.id);
-                  setQty(1);
-                }}
-                className="group flex w-full flex-col overflow-hidden rounded-xl bg-paper text-left ring-1 ring-inset ring-ice-3 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] active:scale-[0.98] disabled:opacity-45 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+            <li key={p.id}>
+              <div
+                className={`group flex h-full flex-col overflow-hidden rounded-[var(--radius-card)] bg-paper text-left ring-1 ring-inset ring-ice-3 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] ${
+                  allOut ? "opacity-60" : ""
+                }`}
               >
-                <span className="relative block aspect-[4/3] bg-ice-2">
-                  {x.product.image && (
+                {/* Photo header */}
+                <div
+                  onClick={() => {
+                    if (allOut) return;
+                    setId(firstInStock.id);
+                    setQty(1);
+                  }}
+                  className={`relative aspect-[4/3] bg-ice-2 overflow-hidden ${allOut ? "cursor-not-allowed" : "cursor-pointer"}`}
+                >
+                  {p.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={x.product.image} alt="" className="size-full object-cover" />
+                    <img
+                      src={p.image}
+                      alt=""
+                      className={`size-full object-cover transition-transform duration-500 ease-[var(--ease-out-expo)] group-hover:scale-105 ${
+                        allOut ? "grayscale-[0.6] brightness-95" : ""
+                      }`}
+                    />
+                  ) : (
+                    <div className="size-full bg-ice-2" />
                   )}
-                  <span className="absolute left-0 top-0 h-full w-1" style={{ backgroundColor: hue.bg }} aria-hidden />
-                </span>
-                <span className="flex flex-col gap-0.5 p-2.5">
-                  <span className="truncate font-bold text-ink">{splitName(x.product.name).local}</span>
-                  <span className="flex items-center justify-between gap-2 text-[13px]">
-                    <span className="truncate text-ink-3">{x.name}</span>
-                    <span className="tabular font-semibold text-ink">{peso(x.price)}</span>
+
+                  {/* Category badge */}
+                  <span
+                    className="absolute left-2.5 top-2.5 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider shadow-sm"
+                    style={{ backgroundColor: hue.soft, color: hue.ink }}
+                  >
+                    {p.category.name}
                   </span>
-                  <StockCount stock={x.stock} className="text-[13px]" />
-                </span>
-              </button>
+
+                  {allOut ? (
+                    <span className="absolute bottom-2.5 right-2.5 rounded-md bg-ink/85 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm">
+                      Sold out
+                    </span>
+                  ) : !hasMultiple ? (
+                    <span className="absolute bottom-2.5 right-2.5 rounded-md bg-paper/95 px-2 py-1 text-xs font-bold text-ink shadow-sm backdrop-blur-sm">
+                      {peso(firstInStock.price)}
+                    </span>
+                  ) : (
+                    <span className="absolute bottom-2.5 right-2.5 rounded-md bg-paper/95 px-2 py-0.5 text-[11px] font-semibold text-ink-2 shadow-sm backdrop-blur-sm">
+                      {p.variants.length} cuts
+                    </span>
+                  )}
+                </div>
+
+                {/* Content & Variant options */}
+                <div className="flex flex-1 flex-col p-3">
+                  <div className="flex items-start justify-between gap-1.5">
+                    <h4 className="truncate font-bold text-[15px] text-ink">{p.localName}</h4>
+                    {p.englishName && (
+                      <span className="shrink-0 text-xs text-ink-3 truncate max-w-[80px]">{p.englishName}</span>
+                    )}
+                  </div>
+
+                  {!hasMultiple ? (
+                    <div className="mt-auto pt-2.5">
+                      <button
+                        type="button"
+                        disabled={allOut}
+                        onClick={() => {
+                          setId(firstInStock.id);
+                          setQty(1);
+                        }}
+                        className="flex w-full items-center justify-between rounded-lg bg-ice px-2.5 py-1.5 text-xs ring-1 ring-inset ring-ice-3 transition-colors hover:bg-mint-soft hover:ring-teal-deep disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                      >
+                        <span className="truncate text-ink-2 font-medium">{firstInStock.name}</span>
+                        <span className="flex items-center gap-1.5 shrink-0">
+                          <span className="font-bold text-ink">{peso(firstInStock.price)}</span>
+                          <StockCount stock={firstInStock.stock} className="text-[11px]" />
+                        </span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-auto flex flex-col gap-1.5 pt-2">
+                      {p.variants.map(vx => {
+                        const out = vx.stock <= 0;
+                        return (
+                          <button
+                            key={vx.id}
+                            type="button"
+                            disabled={out}
+                            onClick={() => {
+                              setId(vx.id);
+                              setQty(1);
+                            }}
+                            className="flex items-center justify-between gap-1.5 rounded-lg bg-ice/70 px-2.5 py-1.5 text-xs ring-1 ring-inset ring-ice-3 transition-colors hover:bg-mint-soft hover:ring-teal-deep disabled:opacity-35 disabled:pointer-events-none cursor-pointer"
+                          >
+                            <span className="truncate text-ink-2 font-medium">{vx.name}</span>
+                            <span className="flex items-center gap-1.5 shrink-0">
+                              <span className="font-bold text-ink">{peso(vx.price)}</span>
+                              <StockCount stock={vx.stock} className="text-[11px]" />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </li>
           );
         })}
@@ -383,6 +512,29 @@ function WalkInMode({ variants, initialId }: { variants: DeskVariant[]; initialI
         {v && (
           <div className="flex flex-col items-center py-4">
             <Thumb src={v.product.image} size="size-28" />
+
+            {siblings.length > 1 && (
+              <div className="mt-4 flex flex-wrap justify-center gap-1.5" role="radiogroup" aria-label="Variant">
+                {siblings.map(sib => (
+                  <button
+                    key={sib.id}
+                    type="button"
+                    onClick={() => {
+                      setId(sib.id);
+                      setQty(1);
+                    }}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition-colors cursor-pointer ${
+                      sib.id === v.id
+                        ? "bg-ink text-white ring-ink"
+                        : "bg-paper text-ink-2 ring-ice-3 hover:bg-ice"
+                    }`}
+                  >
+                    {sib.name} · {peso(sib.price)}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="mt-6 flex items-center gap-4">
               <button onClick={() => setQty(n => Math.max(1, n - 1))} className="grid size-16 place-items-center rounded-2xl bg-paper ring-1 ring-inset ring-ice-3 active:scale-90" aria-label="One less">
                 <Minus className="size-7" />
