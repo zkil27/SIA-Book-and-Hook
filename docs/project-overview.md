@@ -22,8 +22,11 @@ Think of it as two websites sharing one database:
 1. **The storefront** — what a customer sees. Browse seafood, see prices and
    how much stock is left, add things to a cart, and "check out."
 2. **The admin panel** — what the shop's staff sees. Add or edit products,
-   change prices, adjust stock, and look at orders. This part is locked; only
-   staff accounts can get in.
+   change prices, adjust stock, and look at orders. Dashboard prices are shown
+   with two decimal places, recent orders include their order date, and the
+   inventory view has a **Sale candidates** filter for low-stock items that
+   need attention before they sell out. This part is locked; only staff
+   accounts can get in.
 
 ### The real-world problem we're solving
 

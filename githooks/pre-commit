@@ -13,6 +13,16 @@
 
 echo "[pre-commit] running npm run verify ..."
 
+node_major=$(node -p "process.versions.node.split('.')[0]" 2>/dev/null)
+if [ -z "$node_major" ] || [ "$node_major" -lt 20 ]; then
+  echo ""
+  echo "[pre-commit] Node.js 20.9+ is required by Next.js 16."
+  echo "[pre-commit] Current Node.js: $(node --version 2>/dev/null || echo 'not found')"
+  echo "[pre-commit] Start VS Code from a Node 20+ terminal, then retry the commit."
+  echo "[pre-commit] On Windows, verify with: node --version"
+  exit 1
+fi
+
 npm run verify
 status=$?
 

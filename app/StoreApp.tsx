@@ -169,12 +169,17 @@ function BrandLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   );
 }
 
+function formatPeso(value: number): string {
+  return value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 // Product & category data now come from the database via props (see lib/products.ts
 // and app/page.tsx). These types describe the shape the UI consumes.
 type Product = {
   id: string;
+  sku?: string;
   name: string;
   category: string;
   categorySlug: string;
@@ -182,6 +187,7 @@ type Product = {
   unit: string;
   stock: number;
   status: "In Stock" | "Low Stock" | "Out of Stock";
+  oldestStockAt?: string;
 };
 type Category = { name: string; slug: string };
 
@@ -223,6 +229,22 @@ const TEAM = [
 
 type CartItem = { id: string; name: string; price: number; unit: string; qty: number };
 type View = "client" | "admin" | "payment" | "track" | "about" | "contact";
+
+const TO_SALE_AFTER_DAYS = 7;
+
+function stockAgeDays(oldestStockAt?: string): number | null {
+  if (!oldestStockAt) return null;
+  return Math.max(0, Math.floor((Date.now() - new Date(oldestStockAt).getTime()) / 86400000));
+}
+
+function formatStockReceivedDate(oldestStockAt?: string): string {
+  if (!oldestStockAt) return "—";
+  return new Date(oldestStockAt).toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 // ─── Admin Login ──────────────────────────────────────────────────────────────
 
@@ -423,7 +445,7 @@ function ClientView({ products, categories, onCheckout, onNavigate }: {
                   <div className="p-4 flex flex-col gap-1.5 flex-1">
                     <Tag label={p.category} />
                     <p className="text-sm font-bold text-[color:var(--ink)] mt-1 leading-tight">{p.name}</p>
-                    <p className="font-mono text-base font-bold text-[color:var(--ink)]">₱{p.price}<span className="text-[11px] font-normal text-[color:var(--muted)]">{p.unit}</span></p>
+                    <p className="font-mono text-base font-bold text-[color:var(--ink)]">₱{formatPeso(p.price)}<span className="text-[11px] font-normal text-[color:var(--muted)]">{p.unit}</span></p>
                     <p className={`text-[11px] font-mono font-bold uppercase tracking-wide ${stockColor(p.status)}`}>● {p.status}</p>
                     <div className="mt-2">
                       <Btn label={p.status === "Out of Stock" ? "Unavailable" : "+ Add to Cart"}
@@ -482,15 +504,15 @@ function ClientView({ products, categories, onCheckout, onNavigate }: {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-[color:var(--ink)] truncate">{item.name}</p>
-                    <p className="text-[11px] font-mono text-[color:var(--muted)]">₱{item.price} {item.unit} × {item.qty}</p>
-                    <p className="font-mono text-sm font-bold text-[color:var(--ink)]">₱{item.price * item.qty}</p>
+                    <p className="text-[11px] font-mono text-[color:var(--muted)]">₱{formatPeso(item.price)} {item.unit} × {item.qty}</p>
+                    <p className="font-mono text-sm font-bold text-[color:var(--ink)]">₱{formatPeso(item.price * item.qty)}</p>
                   </div>
                   <button onClick={() => removeFromCart(item.id)} aria-label={`Remove ${item.name}`} className="text-[color:var(--muted)] hover:text-[color:var(--coral)] text-sm mt-0.5 font-mono">✕</button>
                 </Card>
               ))}
             </div>
             <div className="px-5 py-4 border-t-2 border-[color:var(--line)] bg-[color:var(--paper)] font-mono">
-              <div className="flex justify-between text-sm text-[color:var(--ink)] mb-1"><span>Subtotal</span><span>₱{cartTotal}</span></div>
+              <div className="flex justify-between text-sm text-[color:var(--ink)] mb-1"><span>Subtotal</span><span>₱{formatPeso(cartTotal)}</span></div>
               <div className="flex justify-between text-xs text-[color:var(--muted)] mb-1">
                 <span>Delivery (Lalamove)</span>
                 <span className="flex items-center gap-1">
@@ -501,7 +523,7 @@ function ClientView({ products, categories, onCheckout, onNavigate }: {
               </div>
               {deliveryFee > 0 && <p className="text-[10px] text-[color:var(--muted)] mb-2">Free delivery on orders ₱500+</p>}
               <div className="flex justify-between font-bold text-[color:var(--ink)] text-base mb-4 pt-2 border-t-2 border-dashed border-[color:var(--line)]">
-                <span>Total</span><span className="text-[color:var(--ink)]">₱{cartTotal + deliveryFee}</span>
+                <span>Total</span><span className="text-[color:var(--ink)]">₱{formatPeso(cartTotal + deliveryFee)}</span>
               </div>
               {cart.length > 0 && (
                 <Btn label="Proceed to Checkout →" filled full onClick={() => { setCartOpen(false); onCheckout(cart); }} />
@@ -523,20 +545,30 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
   const [editStock, setEditStock] = useState("");
   const [invSearch, setInvSearch] = useState("");
   const [invCategory, setInvCategory] = useState("All");
-  const [invStatus, setInvStatus] = useState<"All" | "In Stock" | "Low Stock" | "Out of Stock">("All");
+  const [invStatus, setInvStatus] = useState<"All" | "In Stock" | "Low Stock" | "Out of Stock" | "To Sale">("All");
   const [addOpen, setAddOpen] = useState(false);
 
   function saveStock(id: string) {
     const val = parseInt(editStock);
     if (!isNaN(val)) {
       setInventory(prev => prev.map(p =>
-        p.id === id ? { ...p, stock: val, status: val === 0 ? "Out of Stock" : val <= 10 ? "Low Stock" : "In Stock" } : p
+        p.id === id
+          ? {
+              ...p,
+              stock: val,
+              status: val === 0 ? "Out of Stock" : val <= 10 ? "Low Stock" : "In Stock",
+              oldestStockAt: val > 0 ? new Date().toISOString() : undefined,
+            }
+          : p
       ));
     }
     setEditingId(null);
   }
 
   const lowItems = inventory.filter(p => p.status !== "In Stock");
+  const toSaleItems = inventory.filter(p =>
+    p.stock > 0 && (stockAgeDays(p.oldestStockAt) ?? -1) >= TO_SALE_AFTER_DAYS
+  );
   const pending = ORDERS.filter(o => o.status === "Pending").length;
 
   const invCategories = ["All", ...Array.from(new Set(inventory.map(p => p.category))).sort()];
@@ -546,7 +578,10 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
       p.name.toLowerCase().includes(invQuery) ||
       p.category.toLowerCase().includes(invQuery);
     const matchesCategory = invCategory === "All" || p.category === invCategory;
-    const matchesStatus = invStatus === "All" || p.status === invStatus;
+    const matchesStatus = invStatus === "All" ||
+      (invStatus === "To Sale"
+        ? p.stock > 0 && (stockAgeDays(p.oldestStockAt) ?? -1) >= TO_SALE_AFTER_DAYS
+        : p.status === invStatus);
     return matchesSearch && matchesCategory && matchesStatus;
   });
   const filtersActive = invQuery !== "" || invCategory !== "All" || invStatus !== "All";
@@ -600,14 +635,57 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
               <h2 className="font-display font-extrabold text-3xl md:text-4xl text-[color:var(--ink)] uppercase tracking-tight mb-5">Dashboard</h2>
 
               {lowItems.length > 0 && (
-                <div className="mb-5 bg-[color:var(--marigold)] border-2 border-[color:var(--line)] shadow-[3px_3px_0_var(--shadow-ink)] px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                  <p className="text-sm text-[color:var(--ink)] font-bold flex items-center gap-2">
-                    <IcWarning size={16} className="text-[color:var(--ink)] shrink-0" />
-                    {lowItems.length} item{lowItems.length > 1 ? "s" : ""} need attention: {lowItems.map(i => i.name).join(", ")}
-                  </p>
-                  <button onClick={() => setActiveTab("inventory")} className="text-xs font-mono font-bold uppercase tracking-wide text-[color:var(--ink)] underline whitespace-nowrap">
-                    Go to Inventory →
-                  </button>
+                <div className="mb-5 bg-[color:var(--accent)] border-2 border-[color:var(--accent-ink)] shadow-[var(--shadow-accent)] px-4 py-4 md:px-5 md:py-5">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex items-start gap-3">
+                      <span className="mt-0.5 w-9 h-9 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+                        <IcWarning size={19} className="text-white" />
+                      </span>
+                      <div>
+                        <p className="text-lg leading-tight text-white font-bold">
+                          {lowItems.length} item{lowItems.length > 1 ? "s" : ""} need attention
+                        </p>
+                        <p className="text-xs text-white/80 mt-1">
+                          Review these low-stock products before they sell out.
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={() => setActiveTab("inventory")} className="text-sm font-mono font-bold uppercase tracking-wide text-white underline underline-offset-4 whitespace-nowrap">
+                      Go to Inventory →
+                    </button>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-white/25 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {lowItems.map(item => (
+                      <span key={item.id} className="min-w-0 bg-white/15 px-3 py-2 text-sm font-semibold text-white leading-snug">
+                        {item.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {toSaleItems.length > 0 && (
+                <div className="mb-5 bg-[color:var(--marigold)]/20 border border-[color:var(--marigold)] px-4 py-4 md:px-5">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-base font-bold text-[color:var(--ink)]">
+                        {toSaleItems.length} item{toSaleItems.length > 1 ? "s" : ""} ready for FIFO sale
+                      </p>
+                      <p className="text-xs text-[color:var(--ink)]/70 mt-1">
+                        These items have remaining stock that has been unsold for at least {TO_SALE_AFTER_DAYS} days.
+                      </p>
+                    </div>
+                    <button onClick={() => { setInvStatus("To Sale"); setActiveTab("inventory"); }} className="text-sm font-mono font-bold uppercase tracking-wide text-[color:var(--ink)] underline underline-offset-4 whitespace-nowrap">
+                      View To Sale →
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {toSaleItems.map(item => (
+                      <span key={item.id} className="bg-[color:var(--marigold)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ink)]">
+                        {item.name} · {stockAgeDays(item.oldestStockAt)}d old
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -615,7 +693,7 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                 {[
                   { label: "Orders Today", value: "24", sub: "Sep 1, 2026", icon: <IcDoc size={18} className="text-[color:var(--teal)]" />, accent: "border-t-[color:var(--teal)]", valColor: "text-[color:var(--ink)]" },
                   { label: "Revenue Today", value: "₱12,480", sub: "+8% vs yesterday", icon: <IcPeso size={18} className="text-[color:var(--teal)]" />, accent: "border-t-[color:var(--cyan)]", valColor: "text-[color:var(--ink)]" },
-                  { label: "Stock Alerts", value: String(lowItems.length), sub: "Low / out of stock", icon: <IcWarning size={18} className="text-[color:var(--marigold)]" />, accent: "border-t-[color:var(--marigold)]", valColor: "text-[color:var(--ink)]" },
+                  { label: "Stock Alerts", value: String(lowItems.length), sub: "Low / out of stock", icon: <IcWarning size={18} className="text-[color:var(--accent)]" />, accent: "border-t-[color:var(--accent)]", valColor: "text-[color:var(--accent-ink)]" },
                   { label: "Pending Orders", value: String(pending), sub: "Needs confirmation", icon: <IcClock size={18} className="text-[color:var(--plum)]" />, accent: "border-t-[color:var(--plum)]", valColor: "text-[color:var(--ink)]" },
                 ].map(card => (
                   <Card key={card.label} className={`p-5 border-t-8 ${card.accent}`}>
@@ -668,7 +746,7 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                   <table className="w-full text-sm min-w-[480px]">
                     <thead>
                       <tr className="border-b-2 border-[color:var(--line)]">
-                        {["Order ID","Customer","Total","Payment","Status"].map(h => (
+                        {["Order ID","Customer","Date","Total","Payment","Status"].map(h => (
                           <th key={h} className="text-left text-[11px] font-mono text-[color:var(--muted)] font-bold uppercase tracking-wider pb-2 pr-4">{h}</th>
                         ))}
                       </tr>
@@ -678,7 +756,8 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                         <tr key={o.id} className="border-b border-[color:var(--line)]/25 hover:bg-[color:var(--paper-2)]">
                           <td className="py-3 pr-4 text-xs font-mono font-bold text-[color:var(--teal)]">{o.id}</td>
                           <td className="py-3 pr-4 text-xs text-[color:var(--ink)] font-medium">{o.customer}</td>
-                          <td className="py-3 pr-4 text-xs font-mono font-bold text-[color:var(--ink)]">₱{o.total}</td>
+                          <td className="py-3 pr-4 text-xs font-mono text-[color:var(--muted)] whitespace-nowrap">{o.date}</td>
+                          <td className="py-3 pr-4 text-sm font-mono font-bold text-[color:var(--ink)]">₱{formatPeso(o.total)}</td>
                           <td className="py-3 pr-4"><Tag label={o.payment} color="muted" /></td>
                           <td className="py-3"><Tag label={o.status} color={o.status === "Delivered" ? "muted" : "accent"} /></td>
                         </tr>
@@ -715,7 +794,7 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                   {([
                     { key: "All", label: "All", dot: "" },
                     { key: "In Stock", label: "In stock", dot: "bg-[color:var(--teal)]" },
-                    { key: "Low Stock", label: "Low", dot: "bg-[color:var(--marigold)]" },
+                    { key: "To Sale", label: "To sale", dot: "bg-[color:var(--marigold)]" },
                     { key: "Out of Stock", label: "Out", dot: "bg-[color:var(--coral)]" },
                   ] as const).map((s, i) => (
                     <button key={s.key} onClick={() => setInvStatus(s.key)}
@@ -736,18 +815,30 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                 )}
               </div>
               <Card className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[700px]">
+                <table className="w-full table-fixed text-sm min-w-[980px]">
+                  <colgroup>
+                    <col className="w-[4%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[9%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[7%]" />
+                    <col className="w-[7%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[12%]" />
+                  </colgroup>
                   <thead>
                     <tr className="border-b-2 border-[color:var(--line)] bg-[color:var(--paper-2)]">
-                      {["#","Product","Category","Price","Unit","Stock","Status","Actions"].map(h => (
-                        <th key={h} className="text-left text-[11px] font-mono text-[color:var(--ink)] font-bold uppercase tracking-wider px-5 py-3">{h}</th>
+                      {["#","Seafood ID","Product","Received","Category","Price","Unit","Stock","Status","Actions"].map(h => (
+                        <th key={h} className="text-left text-[11px] font-mono text-[color:var(--ink)] font-bold uppercase tracking-wider px-3 py-3">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredInventory.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-5 py-10 text-center text-sm font-mono text-[color:var(--muted)]">
+                        <td colSpan={10} className="px-5 py-10 text-center text-sm font-mono text-[color:var(--muted)]">
                           {filtersActive
                             ? "No products match these filters. Try clearing them."
                             : "No products yet."}
@@ -756,12 +847,18 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                     )}
                     {filteredInventory.map((p, idx) => (
                       <tr key={p.id} className="border-b border-[color:var(--line)]/25 hover:bg-[color:var(--paper-2)] transition-colors">
-                        <td className="px-5 py-3 text-xs font-mono text-[color:var(--muted)]">{idx + 1}</td>
-                        <td className="px-5 py-3 text-sm font-bold text-[color:var(--ink)]">{p.name}</td>
-                        <td className="px-5 py-3"><Tag label={p.category} /></td>
-                        <td className="px-5 py-3 text-sm font-mono font-bold text-[color:var(--ink)]">₱{p.price}</td>
-                        <td className="px-5 py-3 text-xs font-mono text-[color:var(--muted)]">{p.unit}</td>
-                        <td className="px-5 py-3">
+                        <td className="px-3 py-3 text-xs font-mono text-[color:var(--muted)]">{idx + 1}</td>
+                        <td className="px-3 py-3 text-[11px] font-mono font-bold text-[color:var(--teal)] truncate" title={p.sku ?? p.id}>
+                          {p.sku ?? p.id}
+                        </td>
+                        <td className="px-3 py-3 text-sm font-bold text-[color:var(--ink)] break-words">{p.name}</td>
+                        <td className="px-3 py-3 text-[11px] font-mono text-[color:var(--muted)] whitespace-nowrap">
+                          {formatStockReceivedDate(p.oldestStockAt)}
+                        </td>
+                        <td className="px-3 py-3"><Tag label={p.category} /></td>
+                        <td className="px-3 py-3 text-sm font-mono font-bold text-[color:var(--ink)] whitespace-nowrap">₱{formatPeso(p.price)}</td>
+                        <td className="px-3 py-3 text-xs font-mono text-[color:var(--muted)] whitespace-nowrap">{p.unit}</td>
+                        <td className="px-3 py-3">
                           {editingId === p.id ? (
                             <div className="flex gap-1.5 items-center">
                               <input autoFocus value={editStock} onChange={e => setEditStock(e.target.value)}
@@ -773,13 +870,20 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                             <span className={`text-sm font-mono font-bold ${p.stock === 0 ? "text-[color:var(--coral-ink)]" : p.stock <= 10 ? "text-[color:var(--marigold)]" : "text-[color:var(--ink)]"}`}>{p.stock}</span>
                           )}
                         </td>
-                        <td className="px-5 py-3">
-                          <span className={`text-[11px] font-mono font-bold uppercase tracking-wide ${p.status === "In Stock" ? "text-[color:var(--teal)]" : p.status === "Low Stock" ? "text-[color:var(--marigold)]" : "text-[color:var(--coral-ink)]"}`}>
-                            ● {p.status}
-                          </span>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col items-start gap-1">
+                            <span className={`text-[10px] font-mono font-bold uppercase tracking-wide whitespace-nowrap ${p.status === "In Stock" ? "text-[color:var(--teal)]" : p.status === "Low Stock" ? "text-[color:var(--marigold)]" : "text-[color:var(--coral-ink)]"}`}>
+                              ● {p.status}
+                            </span>
+                            {p.stock > 0 && (stockAgeDays(p.oldestStockAt) ?? -1) >= TO_SALE_AFTER_DAYS && (
+                              <span className="bg-[color:var(--marigold)] px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wide whitespace-nowrap text-[color:var(--ink)]">
+                                To Sale · {stockAgeDays(p.oldestStockAt)}d
+                              </span>
+                            )}
+                          </div>
                         </td>
-                        <td className="px-5 py-3">
-                          <div className="flex gap-3 font-mono">
+                        <td className="px-3 py-3">
+                          <div className="flex gap-2 font-mono whitespace-nowrap">
                             <button onClick={() => { setEditingId(p.id); setEditStock(String(p.stock)); }}
                               className="text-xs text-[color:var(--teal)] hover:underline font-bold uppercase tracking-wide">Edit</button>
                             <button className="text-xs text-[color:var(--coral-ink)] hover:underline font-bold uppercase tracking-wide">Remove</button>
@@ -818,7 +922,7 @@ function AdminView({ products, onLock }: { products: Product[]; onLock: () => vo
                       <p className="text-[10px] font-mono text-[color:var(--muted)] mt-1">{o.date}</p>
                     </div>
                     <div className="flex flex-col items-start md:items-end gap-2">
-                      <p className="font-mono font-bold text-xl text-[color:var(--ink)]">₱{o.total}</p>
+                      <p className="font-mono font-bold text-xl text-[color:var(--ink)]">₱{formatPeso(o.total)}</p>
                       <div className="flex gap-2 flex-wrap">
                         <Btn label="View Details" small />
                         {o.status === "Pending" && <Btn label="Confirm Order" filled small />}
@@ -1219,9 +1323,9 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-[color:var(--ink)] truncate">{item.name}</p>
-                      <p className="text-xs font-mono text-[color:var(--muted)] mt-0.5">₱{item.price} {item.unit} × {item.qty}</p>
+                      <p className="text-xs font-mono text-[color:var(--muted)] mt-0.5">₱{formatPeso(item.price)} {item.unit} × {item.qty}</p>
                     </div>
-                    <span className="font-mono font-bold text-base text-[color:var(--ink)] shrink-0">₱{item.price * item.qty}</span>
+                    <span className="font-mono font-bold text-base text-[color:var(--ink)] shrink-0">₱{formatPeso(item.price * item.qty)}</span>
                   </div>
                 ))}
                 <div className="mt-2 flex justify-end"><Btn label="Continue →" filled onClick={() => setStep(2)} /></div>
@@ -1361,7 +1465,7 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
                       </div>
                       <div>
                         <p className="text-sm text-[color:var(--ink)] leading-relaxed">
-                          Prepare <strong className="text-[color:var(--ink)] font-mono text-base">₱{total}</strong> in cash. Our Lalamove rider will collect payment upon delivery.
+                          Prepare <strong className="text-[color:var(--ink)] font-mono text-base">₱{formatPeso(total)}</strong> in cash. Our Lalamove rider will collect payment upon delivery.
                         </p>
                         <p className="text-xs font-mono text-[color:var(--muted)] mt-2 flex items-center gap-1.5">
                           <IcPhone size={11} /> SMS confirmation sent once your order is dispatched.
@@ -1398,7 +1502,7 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
                     ["Courier", <Tag key="v" label="Lalamove" />],
                     ["Status", <Tag key="v" label="Pending Confirmation" />],
                     ["Est. Delivery", "Tomorrow, 6–8 AM"],
-                    ["Total Paid", <span key="v" className="font-bold text-[color:var(--ink)]">₱{total}</span>],
+                    ["Total Paid", <span key="v" className="font-bold text-[color:var(--ink)]">₱{formatPeso(total)}</span>],
                   ].map(([k, v], i) => (
                     <div key={i} className="flex justify-between items-center py-1.5 border-b border-dashed border-[color:var(--line)]/25 last:border-0">
                       <span className="text-[color:var(--muted)]">{k}</span>
@@ -1430,17 +1534,17 @@ function PaymentView({ cart, onBack, onTrack }: { cart: CartItem[]; onBack: () =
             {cart.map(item => (
               <div key={item.id} className="flex justify-between text-xs text-[color:var(--ink)] mb-1.5">
                 <span className="truncate pr-2">{item.name} ×{item.qty}</span>
-                <span className="shrink-0 font-bold">₱{item.price * item.qty}</span>
+                <span className="shrink-0 font-bold">₱{formatPeso(item.price * item.qty)}</span>
               </div>
             ))}
             <Divider />
-            <div className="flex justify-between text-xs text-[color:var(--muted)] mb-1.5"><span>Subtotal</span><span>₱{subtotal}</span></div>
+            <div className="flex justify-between text-xs text-[color:var(--muted)] mb-1.5"><span>Subtotal</span><span>₱{formatPeso(subtotal)}</span></div>
             <div className="flex justify-between text-xs text-[color:var(--muted)] mb-1.5">
               <span>Delivery (Lalamove)</span>
               <span>{deliveryFee === 0 ? <span className="text-[color:var(--teal)] font-bold">Free</span> : `₱${deliveryFee}`}</span>
             </div>
             <div className="flex justify-between font-bold text-[color:var(--ink)] text-base mt-3 pt-3 border-t-2 border-dashed border-[color:var(--line)]">
-              <span>Total</span><span className="text-[color:var(--ink)]">₱{total}</span>
+              <span>Total</span><span className="text-[color:var(--ink)]">₱{formatPeso(total)}</span>
             </div>
           </Card>
         </div>
@@ -1563,7 +1667,7 @@ function TrackOrderView({ onBack }: { onBack: () => void }) {
                   { icon: <IcCard size={13}/>, label: "Payment", value: result.payment },
                   { icon: <IcTruck size={13}/>, label: "Courier", value: <Tag label="Lalamove" /> },
                   { icon: <IcCheckCircle size={13}/>, label: "Status", value: <Tag label={result.status} color={result.status === "Delivered" ? "muted" : "accent"} /> },
-                  { icon: <IcPeso size={13}/>, label: "Total", value: <span className="font-bold text-[color:var(--ink)]">₱{result.total}</span> },
+                  { icon: <IcPeso size={13}/>, label: "Total", value: <span className="font-bold text-[color:var(--ink)]">₱{formatPeso(result.total)}</span> },
                 ] as const).map((row, i) => (
                   <div key={i} className="flex justify-between items-center py-2.5 border-b border-dashed border-[color:var(--line)]/25 last:border-0 text-sm">
                     <span className="flex items-center gap-2 text-[color:var(--muted)]">
@@ -1846,4 +1950,3 @@ export default function StoreApp({ products, categories }: {
     </div>
   );
 }
-

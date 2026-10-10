@@ -72,7 +72,7 @@ delivery radius. Has a Facebook page used for orders and price announcements.
 | Product create / edit | Form creates and updates a product and its variants, including price in centavos and SKU. |
 | Product archive | Soft-delete / deactivate. Products are never hard-deleted — orders reference them. |
 | Category management | Admin can create and rename categories. |
-| Stock adjustment | Admin can adjust variant stock with a reason; writes a `StockMovement` row. |
+| Stock adjustment | Admin can adjust variant stock with a reason; writes a `StockMovement` row. Remaining stock lots are evaluated FIFO-style, and stock at least 7 days old is flagged **To Sale** for admin review only. |
 | Stock history | Read-only ledger view per variant showing every movement, newest first. |
 | Order list & status update | Table of orders with status and total. Admin can update status (pending → confirmed → ready → completed / cancelled). |
 | Dashboard summary | Today's order count, total revenue, and low-stock alerts on the /admin landing page. |

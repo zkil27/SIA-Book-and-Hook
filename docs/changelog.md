@@ -7,6 +7,117 @@ Each entry follows: **Date — summary**, then What / Why / Impact.
 
 ---
 
+## 2026-10-10 — Make the pre-commit runtime error actionable
+
+**What:** Added Node.js version requirements to `package.json` and a runtime
+guard to `githooks/pre-commit`.
+
+**Why:** Commits from a Node 14 VS Code terminal failed with a generic
+`npm ERR!` because Next.js 16 requires Node.js 20.9 or newer.
+
+**Impact:** The hook now stops before running verification and explains the
+required runtime and how to check it. Use Node.js 20.9+ in the VS Code terminal
+before committing; no source behavior changed.
+
+## 2026-10-10 — Improve inventory table column layout
+
+**What:** Tightened the admin inventory table layout with controlled column
+widths, smaller consistent cell padding, truncation for long seafood IDs,
+wrapped product names, reserved space for Actions, and non-wrapping status
+badges.
+
+**Why:** The inventory screenshot showed the rightmost actions clipped and the
+To Sale badge breaking into multiple awkward lines.
+
+**Impact:** Inventory information remains unchanged, but the table is easier to
+scan and keeps the ID, received date, status, and actions visually separated.
+
+## 2026-10-10 — Show received dates in offline fallback inventory
+
+**What:** Added a documented fallback received date to catalog rows returned
+when the database is unavailable. Live rows continue to use the oldest
+remaining stock lot from the stock-movement ledger.
+
+**Why:** The admin inventory displayed `—` for received dates while the app
+was using its offline fallback catalog, because fallback rows do not contain
+stock movement timestamps.
+
+**Impact:** Offline/demo inventory now shows a received date instead of a blank
+value. This is clearly fallback data; no database records or live FIFO dates
+are changed.
+
+## 2026-10-10 — Show seafood IDs and received dates in inventory
+
+**What:** Added seafood identifiers and stock received dates to the admin
+inventory table.
+- Product variants now expose their SKU from `lib/products.ts`.
+- The inventory table displays the SKU (falling back to the variant ID for
+  fallback catalog rows) and the date of the oldest remaining stock lot.
+
+**Why:** Admin staff need to identify each seafood item and see when its
+currently available stock arrived for FIFO review.
+
+**Impact:** Admin-only presentation change. The received date uses the
+append-only stock ledger and does not add or modify stock data.
+
+## 2026-10-10 — Flag aged stock for FIFO sale review
+
+**What:** Added FIFO-style stock ageing to the admin inventory workflow.
+- `lib/products.ts` now replays each variant's append-only stock movements in
+  chronological order to identify the oldest remaining stock lot.
+- `app/StoreApp.tsx` flags positive stock at least 7 days old as **To Sale**,
+  adds a To Sale filter, shows the age beside the inventory status, and adds a
+  dashboard review panel.
+- Updated `docs/scope.md` to record the admin-only behavior.
+
+**Why:** Staff need a clear way to identify stock that has remained unsold long
+enough to prioritize it for sale using first-in, first-out handling.
+
+**Impact:** Admin-only flag and filter; no storefront price changes, discounts,
+or dynamic pricing. Stock remains governed by the append-only ledger.
+
+## 2026-10-10 — Improve stock alert readability
+
+**What:** Reworked the dashboard stock alert in `app/StoreApp.tsx` into a
+structured warning panel with a clear item count, supporting guidance,
+responsive product-name chips, and a separated Inventory action.
+
+**Why:** The previous alert rendered every product name in one dense line,
+making a long list difficult to scan.
+
+**Impact:** Presentation-only change. The same low-stock products and
+navigation behavior are preserved, but each item is now independently visible
+and easier to read on desktop and mobile.
+
+## 2026-10-10 — Restore local verification on the supported Node runtime
+
+**What:** Updated `app/layout.tsx` to use an explicit `ReactNode` children type
+instead of the unavailable `LayoutProps<"/">` global.
+
+**Why:** After restoring dependencies with Node 20, the verification gate
+reported that `LayoutProps` was undefined during TypeScript checking.
+
+**Impact:** Removes the typecheck blocker without changing layout behavior.
+The project requires Node.js 20.9+ for Next.js 16; the local dependency install
+and Prisma client generation now complete successfully.
+
+## 2026-10-10 — Clarify admin pricing, order dates, sale candidates, and alerts
+
+**What:** Updated `app/StoreApp.tsx` to:
+- Render all displayed peso amounts with two decimal places.
+- Add the date column to the dashboard's Recent Orders table.
+- Add an explicit **Sale candidates** inventory filter for low-stock items.
+- Increase the stock-alert banner/card emphasis with the red accent treatment.
+- Increase key admin table and alert text sizes for readability.
+Updated `docs/project-overview.md` to describe the admin dashboard refinements.
+
+**Why:** Addressed UI review nitpicks about decimal prices, recent-order dates,
+identifying items nearing sellout, alert visibility, and font size.
+
+**Impact:** Presentation-only changes; money remains stored and calculated as
+integer centavos, with decimal formatting applied only at render time. No
+schema, dependency, or database behavior changes.
+
 ## 2026-09-26 — Storefront resilience: catalog fallback for paused/offline database
 
 **What:** Added graceful error fallback handling to `lib/products.ts` and created `lib/fallback-catalog.ts`.
