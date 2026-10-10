@@ -5,6 +5,19 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-10-10 — Enable customer self-service cancellation for orders not yet in delivery
+
+**What:**
+- Added `cancelCustomerOrder` server action in `lib/actions/checkout.ts` allowing customers to cancel orders when status is `PENDING` ("Order placed") or `CONFIRMED` ("Confirmed and packed"). Restricts cancellation if the order has advanced to `READY` ("Out for delivery") or `COMPLETED`.
+- Safely returns reserved items to the inventory ledger through append-only compensating `StockMovement` rows, updates order status to `CANCELLED`, and appends an `OrderStatusEvent` timeline audit record.
+- Created `components/shop/CancelOrderDialog.tsx` with a destructive trigger button and interactive `Sheet` modal featuring quick reason chips, custom note input, destructive confirmation button, and feedback toasts.
+- Updated `app/(shop)/track/page.tsx` to conditionally render the cancellation action and policy note whenever `canCancel` (`status === "PENDING" || status === "CONFIRMED"`) is true.
+- Updated `docs/scope.md` to reflect customer order cancellation before delivery.
+
+**Why:** User requested to make orders cancelable on the order tracking surface if they are not yet in delivery.
+
+**Impact:** Customers can cleanly cancel un-dispatched orders with full auditability, live ledger inventory restoration, and real-time timeline cancellation stamping.
+
 ## 2026-10-10 — Fix payment method radio checkmark animation and layout projection glitch
 
 **What:**
