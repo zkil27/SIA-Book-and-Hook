@@ -136,11 +136,16 @@ Set both locally (`.env.local`) and in Vercel for all environments.
 - DB verification (read-only, run after seeding): `npm run smoke`,
   `npm run check:ledger`, `npm run check:data`, `npm run check:all`; load probe:
   `npm run stress -- <total> <concurrency>`.
+- Dev admin account (writes one User): `npm run dev:admin` with
+  `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD` set in the environment.
 
 ## Verification gate (tool-agnostic — applies to every tool and teammate)
 
 `npm run verify` runs `typecheck && lint && footguns` and must pass before a
-commit. It is enforced universally — not tied to any one editor.
+commit. It is enforced universally — not tied to any one editor. Lint runs
+with `--max-warnings=0`: **a warning fails the gate** just like an error.
+Third-party tool folders (`.agents/`, `.kiro/`, `.claude/`, `.cursor/`) are
+excluded from lint in `eslint.config.mjs`.
 
 **Run it exactly once, at the very end of a task — mandatory.** Batch every edit
 first, then verify a single time as the last step. Never verify mid-task, after
@@ -167,7 +172,16 @@ task is wasted cost and is not allowed here.
 Adding a new project-wide "never do this" rule? Encode it as a rule in
 `scripts/check-footguns.ts` so it's enforced, not just documented.
 
-## Known issues / current gaps (updated 2026-10-10)
+## Known issues / current gaps (updated 2026-11-05)
+
+0. **2026-11-05 performance pass** (`docs/performance.md`): stock is summed in
+   SQL (`lib/stock-sql.ts`), never by loading ledger rows into Node. Writes call
+   `invalidate("admin" | "orders" | "shop")` from `lib/actions/util.ts`, not a
+   whole-app revalidate. Functions are pinned to `sin1` in `vercel.json`.
+   Migration `20261105000000_add_query_indexes` must be applied with
+   `npx prisma migrate deploy`. Order writes live in `lib/orders-core.ts`
+   (server-only, NOT `"use server"`). Developer tools: `/admin/dev`, gated by
+   ADMIN + `DEV_EMAILS` (`docs/dev-tools.md`).
 
 1. **`build` script is `prisma generate && next build`** for Vercel
    (cached Prisma client goes stale otherwise).
@@ -183,7 +197,7 @@ Adding a new project-wide "never do this" rule? Encode it as a rule in
 4. **Migration `20261010000000_storefront_admin_overhaul` must be applied** to
    Supabase (`npx prisma migrate deploy; npx prisma db seed`) before the new
    checkout/admin can write. Without a database the storefront falls back to the
-   static catalog and the admin shows an offline panel.
+   static catalog and admin pages show their error boundary (database offline).
 5. **No keep-alive cron** — Supabase pauses free projects after ~7 idle days.
 
 ## Token / credit efficiency (how agents should work here)

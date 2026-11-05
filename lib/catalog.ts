@@ -1,15 +1,18 @@
 import "server-only";
 import { cache } from "react";
 import { connection } from "next/server";
+import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CATALOG, dishesForName, imageForName, type Dish } from "@/lib/catalog-data";
+import { categoriesOf, staticCatalogProducts } from "@/lib/catalog-fixture";
+import { stockByVariant } from "@/lib/stock-sql";
 import { startOfShopDay } from "@/lib/time";
 
 /**
- * Storefront catalog reads. Stock comes from the StockMovement ledger.
- * When the database is unreachable (e.g. a paused Supabase project) the
- * storefront falls back to the static catalog so the site still renders;
- * ordering is disabled in that mode (`offline: true`).
+ * Storefront catalog reads. Stock comes from the StockMovement ledger,
+ * summed in SQL. When the database is unreachable (e.g. a paused Supabase
+ * project) the storefront falls back to the static catalog so the site still
+ * renders; ordering is disabled in that mode (`offline: true`).
  */
 
 export type ShopVariant = {
@@ -39,90 +42,107 @@ export type ShopCatalog = {
   offline: boolean;
 };
 
-function categoriesOf(products: ShopProduct[]): ShopCategory[] {
-  const map = new Map<string, ShopCategory>();
-  for (const p of products) {
-    const c = map.get(p.category.slug) ?? { ...p.category, count: 0 };
-    c.count++;
-    map.set(p.category.slug, c);
-  }
-  return [...map.values()];
+function fallbackCatalog(): ShopCatalog {
+  const products = staticCatalogProducts();
+  return { products, categories: categoriesOf(products), offline: true };
 }
 
-function fallbackCatalog(): ShopCatalog {
-  const products: ShopProduct[] = CATALOG.flatMap(cat =>
-    cat.products.map(p => ({
-      id: `offline-${p.variants[0].sku}`,
-      name: p.name,
-      description: p.description,
-      image: p.image,
-      category: { name: cat.name, slug: cat.slug },
-      dishes: p.dishes,
-      variants: p.variants.map(v => ({
-        id: `offline-${v.sku}`,
-        name: v.name,
-        sku: v.sku,
-        price: v.price * 100,
-        stock: v.opening,
-        priceChangedToday: false,
-      })),
-    }))
-  );
-  return { products, categories: categoriesOf(products), offline: true };
+const shopProductSelect = {
+  id: true,
+  name: true,
+  description: true,
+  imageUrl: true,
+  category: { select: { name: true, slug: true } },
+  variants: {
+    where: { active: true },
+    orderBy: { priceCentavos: "desc" as const },
+    select: { id: true, name: true, sku: true, priceCentavos: true, priceUpdatedAt: true },
+  },
+} satisfies Prisma.ProductSelect;
+
+type ShopRow = Prisma.ProductGetPayload<{ select: typeof shopProductSelect }>;
+
+function shapeShopProduct(p: ShopRow, stock: Map<string, number>, today: Date): ShopProduct {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    image: p.imageUrl ?? imageForName(p.name),
+    category: p.category,
+    dishes: dishesForName(p.name),
+    variants: p.variants.map(v => ({
+      id: v.id,
+      name: v.name,
+      sku: v.sku,
+      price: v.priceCentavos,
+      stock: stock.get(v.id) ?? 0,
+      priceChangedToday: !!v.priceUpdatedAt && v.priceUpdatedAt >= today,
+    })),
+  };
+}
+
+const sellableWhere = { active: true, variants: { some: { active: true } } } satisfies Prisma.ProductWhereInput;
+
+/**
+ * Database read of the sellable catalog. Throws when the database is down.
+ * Uncached: the dev timing probes call this directly.
+ */
+export async function loadCatalogFromDb(): Promise<ShopProduct[]> {
+  const [rows, sums] = await Promise.all([
+    prisma.product.findMany({
+      where: sellableWhere,
+      select: shopProductSelect,
+      orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
+    }),
+    // Only movements of sellable variants, not the whole ledger.
+    prisma.stockMovement.groupBy({
+      by: ["variantId"],
+      where: { variant: { active: true, product: { active: true } } },
+      _sum: { quantity: true },
+    }),
+  ]);
+  const stock = new Map(sums.map(s => [s.variantId, s._sum.quantity ?? 0]));
+  const today = startOfShopDay();
+  const products = rows.map(p => shapeShopProduct(p, stock, today));
+
+  // Category order follows the catalog definition (Fish first), then name.
+  const rank = new Map(CATALOG.map((c, i) => [c.slug, i]));
+  products.sort((a, b) => (rank.get(a.category.slug) ?? 99) - (rank.get(b.category.slug) ?? 99));
+  return products;
+}
+
+function warnOffline(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  console.warn(`[catalog] Database unavailable (${message.slice(0, 100)}). Using offline catalog.`);
 }
 
 /** Per-request cached: the layout (price crawl) and the page share one read. */
 export const getShopCatalog = cache(async (): Promise<ShopCatalog> => {
   await connection(); // live stock: always render at request time
   try {
-    const [rows, sums] = await Promise.all([
-      prisma.product.findMany({
-        where: { active: true, variants: { some: { active: true } } },
-        include: {
-          category: true,
-          variants: { where: { active: true }, orderBy: { priceCentavos: "desc" } },
-        },
-        orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
-      }),
-      prisma.stockMovement.groupBy({ by: ["variantId"], _sum: { quantity: true } }),
-    ]);
-    const stockOf = new Map(sums.map(s => [s.variantId, s._sum.quantity ?? 0]));
-    const today = startOfShopDay();
-
-    const products: ShopProduct[] = rows.map(p => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      image: p.imageUrl ?? imageForName(p.name),
-      category: { name: p.category.name, slug: p.category.slug },
-      dishes: dishesForName(p.name),
-      variants: p.variants.map(v => ({
-        id: v.id,
-        name: v.name,
-        sku: v.sku,
-        price: v.priceCentavos,
-        stock: stockOf.get(v.id) ?? 0,
-        priceChangedToday: !!v.priceUpdatedAt && v.priceUpdatedAt >= today,
-      })),
-    }));
-
-    // Category order follows the catalog definition (Fish first), then name.
-    const order = CATALOG.map(c => c.slug);
-    products.sort((a, b) => {
-      const ai = order.indexOf(a.category.slug);
-      const bi = order.indexOf(b.category.slug);
-      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-    });
-
+    const products = await loadCatalogFromDb();
     return { products, categories: categoriesOf(products), offline: false };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[catalog] Database unavailable (${message.slice(0, 100)}). Using offline catalog.`);
+    warnOffline(err);
     return fallbackCatalog();
   }
 });
 
-export async function getShopProduct(id: string): Promise<{ product: ShopProduct | null; offline: boolean }> {
-  const catalog = await getShopCatalog();
-  return { product: catalog.products.find(p => p.id === id) ?? null, offline: catalog.offline };
-}
+/** One sellable product (product page): a single-product query, not the whole catalog. */
+export const getShopProduct = cache(
+  async (id: string): Promise<{ product: ShopProduct | null; offline: boolean }> => {
+    await connection();
+    try {
+      const row = await prisma.product.findFirst({ where: { id, ...sellableWhere }, select: shopProductSelect });
+      if (!row) return { product: null, offline: false };
+      const stock = await stockByVariant(
+        prisma,
+        row.variants.map(v => v.id)
+      );
+      return { product: shapeShopProduct(row, stock, startOfShopDay()), offline: false };
+    } catch (err) {
+      warnOffline(err);
+      return { product: fallbackCatalog().products.find(p => p.id === id) ?? null, offline: true };
+    }
+  }
+);

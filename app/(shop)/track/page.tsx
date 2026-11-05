@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { Search } from "lucide-react";
 import { findOrderByNumber } from "@/lib/orders";
+import { getUser } from "@/lib/session";
 import { orderCode, parseOrderCode, PAYMENT_LABEL, splitName } from "@/lib/meta";
 import { peso } from "@/lib/money";
 import { fmtDateTime } from "@/lib/time";
@@ -16,7 +17,7 @@ export default async function TrackPage(props: PageProps<"/track">) {
   const sp = await props.searchParams;
   const raw = typeof sp.code === "string" ? sp.code : "";
   const n = raw ? parseOrderCode(raw) : null;
-  const result = n ? await findOrderByNumber(n) : undefined;
+  const [result, user] = await Promise.all([n ? findOrderByNumber(n) : Promise.resolve(undefined), getUser()]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 pt-8 sm:px-6 sm:pt-12">
@@ -67,7 +68,17 @@ export default async function TrackPage(props: PageProps<"/track">) {
                 </div>
                 <div className="flex flex-wrap items-center gap-2.5">
                   <StatusChip status={result.status} />
-                  {canCancel && <CancelOrderDialog code={result.code} />}
+                  {canCancel &&
+                    (user ? (
+                      <CancelOrderDialog code={result.code} />
+                    ) : (
+                      <Link
+                        href={`/login?next=${encodeURIComponent(`/track?code=${result.code}`)}`}
+                        className="text-sm font-semibold text-teal-deep underline"
+                      >
+                        Sign in to cancel
+                      </Link>
+                    ))}
                 </div>
               </div>
             <div className="mt-8">

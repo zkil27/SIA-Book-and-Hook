@@ -1,4 +1,9 @@
+import Image from "next/image";
 import Link from "next/link";
+import markSrc from "@/public/imports/Vector.png";
+
+// Display height per size; width follows the mark's 461×764 aspect ratio.
+const MARK_PX = { sm: 24, md: 32, lg: 40 } as const;
 
 /**
  * Hook & Box wordmark, rebuilt from the brand art (public/imports/Frame_15.png):
@@ -14,8 +19,13 @@ export function Logo({ size = "md", href = "/" }: { size?: "sm" | "md" | "lg"; h
       className={`inline-flex items-center rounded-[10px] bg-teal shadow-[0_2px_0_#1d8197] select-none ${pad}`}
       aria-label="Hook & Box"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/imports/Vector.png" alt="" className={`${mark} w-auto`} />
+      <Image
+        src={markSrc}
+        alt=""
+        height={MARK_PX[size]}
+        width={Math.round((MARK_PX[size] * 461) / 764)}
+        className={`${mark} w-auto`}
+      />
       <span className={`sign sticker ${text} leading-none tracking-[0.01em]`} aria-hidden>
         <span className="text-teal">HOOK&amp;</span>
         <span className="text-mint">BOX</span>

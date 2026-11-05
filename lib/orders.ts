@@ -54,10 +54,33 @@ export async function findOrderByNumber(orderNumber: number): Promise<TrackedOrd
   }
 }
 
-export async function listMyOrders(customerId: string): Promise<TrackedOrder[] | "offline"> {
+export type MyOrder = Omit<TrackedOrder, "events">;
+
+/** Order history for /account: no timeline events (the list never shows them). */
+export async function listMyOrders(customerId: string): Promise<MyOrder[] | "offline"> {
   try {
-    const rows = await prisma.order.findMany({ where: { customerId }, include, orderBy: { createdAt: "desc" }, take: 50 });
-    return rows.map(shape);
+    const rows = await prisma.order.findMany({
+      where: { customerId },
+      include: { items: include.items },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    return rows.map(o => ({
+      code: orderCode(o.orderNumber),
+      status: o.status,
+      createdAt: o.createdAt,
+      slot: o.deliverySlot,
+      payment: o.paymentMethod,
+      total: o.totalCentavos,
+      fee: o.deliveryFeeCentavos,
+      items: o.items.map(i => ({
+        name: i.variant.product.name,
+        variant: i.variant.name,
+        qty: i.quantity,
+        price: i.priceAtTime,
+        image: i.variant.product.imageUrl,
+      })),
+    }));
   } catch {
     return "offline";
   }

@@ -1,24 +1,46 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/session";
+import { isDevEmail } from "@/lib/dev/access";
 import { getAdminCounts, loadInventory, sellable } from "@/lib/admin-data";
 import { orderCode, STATUS_META } from "@/lib/meta";
-import { AdminShell, type Counts, type PaletteItem } from "@/components/admin/AdminShell";
+import { AdminShell, type ShellData } from "@/components/admin/AdminShell";
+import { AdminShellSkeleton } from "@/components/admin/skeletons";
 import { ToastProvider } from "@/components/ui/toast";
-import { DbOffline } from "@/components/admin/kit";
 
 export const metadata: Metadata = { title: { default: "Admin", template: "%s · Hook & Box admin" } };
 
-export default async function AdminLayout({ children }: { children: ReactNode }) {
-  // Second line of defence after proxy.ts: customers never render admin UI.
-  const admin = await requireAdmin();
+export default function AdminLayout({ children }: { children: ReactNode }) {
+  return (
+    <ToastProvider>
+      <Suspense fallback={<AdminShellSkeleton />}>
+        <AdminGate>{children}</AdminGate>
+      </Suspense>
+    </ToastProvider>
+  );
+}
 
-  let counts: Counts = { pending: 0, out: 0, low: 0, toSale: 0 };
-  let palette: PaletteItem[] = [];
-  let offline = false;
+/**
+ * Second line of defence after proxy.ts: customers never render admin UI.
+ * Only the session check is awaited; badge counts and palette data stream in
+ * as a promise so the page doesn't wait on them.
+ */
+async function AdminGate({ children }: { children: ReactNode }) {
+  const admin = await requireAdmin();
+  const data = loadShellData();
+  return (
+    <AdminShell data={data} userName={admin.name ?? admin.email} isDev={isDevEmail(admin.email)}>
+      {children}
+    </AdminShell>
+  );
+}
+
+const EMPTY: ShellData = { counts: { pending: 0, out: 0, low: 0, toSale: 0 }, orders: [], variants: [], products: [] };
+
+async function loadShellData(): Promise<ShellData> {
   try {
-    const [c, inv, openOrders] = await Promise.all([
+    const [counts, inv, openOrders] = await Promise.all([
       getAdminCounts(),
       loadInventory(),
       prisma.order.findMany({
@@ -28,51 +50,20 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         take: 60,
       }),
     ]);
-    counts = c;
-    const vs = sellable(inv);
-    palette = [
-      ...openOrders.map(o => ({
-        label: `${orderCode(o.orderNumber)} · ${o.deliveryName || "Customer"}`,
-        hint: STATUS_META[o.status].label,
-        href: `/admin/orders?open=${orderCode(o.orderNumber)}`,
-        group: "Orders to handle",
-        keywords: `${orderCode(o.orderNumber)} ${o.orderNumber}`,
+    return {
+      counts,
+      orders: openOrders.map(o => ({
+        code: orderCode(o.orderNumber),
+        number: o.orderNumber,
+        name: o.deliveryName || "Customer",
+        status: STATUS_META[o.status].label,
       })),
-      ...vs.map(v => ({
-        label: `Adjust stock · ${v.product.name} ${v.name}`,
-        hint: `${v.stock} on hand`,
-        href: `/admin/stock?v=${v.id}`,
-        group: "Stock",
-        keywords: v.sku,
-      })),
-      ...vs.map(v => ({
-        label: `Walk-in sale · ${v.product.name} ${v.name}`,
-        href: `/admin/stock?mode=walkin&v=${v.id}`,
-        group: "Walk-in sale",
-        keywords: `${v.sku} sell counter`,
-      })),
-      ...vs.map(v => ({
-        label: `Ledger · ${v.product.name} ${v.name}`,
-        href: `/admin/ledger?v=${v.id}`,
-        group: "Stock ledger",
-        keywords: `${v.sku} history movements`,
-      })),
-      ...inv.map(p => ({
-        label: `Edit · ${p.name}${p.active ? "" : " (archived)"}`,
-        href: `/admin/products/${p.id}`,
-        group: "Products",
-        keywords: p.category.name,
-      })),
-    ];
+      variants: sellable(inv).map(v => ({ id: v.id, label: `${v.product.name} ${v.name}`, sku: v.sku, stock: v.stock })),
+      products: inv.map(p => ({ id: p.id, name: p.name, active: p.active, category: p.category.name })),
+    };
   } catch {
-    offline = true;
+    // The page itself reports the outage (admin error boundary); the shell
+    // just shows no badges.
+    return EMPTY;
   }
-
-  return (
-    <ToastProvider>
-      <AdminShell counts={counts} palette={palette} userName={admin.name ?? admin.email}>
-        {offline ? <DbOffline /> : children}
-      </AdminShell>
-    </ToastProvider>
-  );
 }

@@ -1,8 +1,9 @@
 "use server";
 
 import { requireAdmin } from "@/lib/session";
-import { orderCode, STATUS_META, type OrderStatusKey } from "@/lib/meta";
-import { dbError, fail, ok, refreshAll, serializable, UserError, type ActionResult } from "./util";
+import { STATUS_META, type OrderStatusKey } from "@/lib/meta";
+import { cancelOrderTx } from "@/lib/orders-core";
+import { dbError, fail, ok, invalidate, serializable, UserError, type ActionResult } from "./util";
 
 /**
  * Move an order one step along PENDING → CONFIRMED → READY → COMPLETED.
@@ -20,7 +21,7 @@ export async function advanceOrder(orderId: string, from: OrderStatusKey): Promi
       await tx.order.update({ where: { id: orderId }, data: { status: to } });
       await tx.orderStatusEvent.create({ data: { orderId, fromStatus: from, toStatus: to, actorId: admin.id } });
     });
-    refreshAll();
+    invalidate("admin", "orders");
     return ok({ to });
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);
@@ -41,7 +42,7 @@ export async function revertOrder(orderId: string, from: OrderStatusKey, to: Ord
         data: { orderId, fromStatus: from, toStatus: to, actorId: admin.id, note: "Undo" },
       });
     });
-    refreshAll();
+    invalidate("admin", "orders");
     return ok(null);
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);
@@ -63,7 +64,7 @@ export async function advanceOrders(orderIds: string[], from: OrderStatusKey): P
       }
       return orders.length;
     });
-    refreshAll();
+    invalidate("admin", "orders");
     return ok({ count });
   } catch (err) {
     return dbError(err);
@@ -82,34 +83,15 @@ export async function cancelOrder(orderId: string, reason: string): Promise<Acti
     await serializable(async tx => {
       const order = await tx.order.findUnique({
         where: { id: orderId },
-        include: { items: true, stockMovements: { select: { variantId: true, quantity: true } } },
+        include: { stockMovements: { select: { variantId: true, quantity: true } } },
       });
       if (!order) throw new UserError("Order not found.");
       if (order.status === "CANCELLED" || order.status === "COMPLETED") {
         throw new UserError(`A ${STATUS_META[order.status].label.toLowerCase()} order can't be cancelled.`);
       }
-      const code = orderCode(order.orderNumber);
-      // Return exactly what this order still holds per variant (net of earlier returns).
-      const held = new Map<string, number>();
-      for (const m of order.stockMovements) held.set(m.variantId, (held.get(m.variantId) ?? 0) - m.quantity);
-      const returns = [...held.entries()].filter(([, q]) => q > 0);
-      if (returns.length) {
-        await tx.stockMovement.createMany({
-          data: returns.map(([variantId, q]) => ({
-            variantId,
-            quantity: q,
-            reason: `Cancelled — ${code} (back to stock)`,
-            orderId,
-            actorId: admin.id,
-          })),
-        });
-      }
-      await tx.order.update({ where: { id: orderId }, data: { status: "CANCELLED" } });
-      await tx.orderStatusEvent.create({
-        data: { orderId, fromStatus: order.status, toStatus: "CANCELLED", actorId: admin.id, note },
-      });
+      await cancelOrderTx(tx, order, admin.id, note, "Cancelled");
     });
-    refreshAll();
+    invalidate("admin", "orders");
     return ok(null);
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);

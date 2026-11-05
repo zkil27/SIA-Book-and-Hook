@@ -10,7 +10,7 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "footguns": "tsx scripts/check-footguns.ts",
     "verify": "npm run typecheck && npm run lint && npm run footguns",
@@ -20,7 +20,8 @@
     "check:ledger": "tsx scripts/check-ledger.ts",
     "check:data": "tsx scripts/check-data.ts",
     "check:all": "tsx scripts/smoke.ts && tsx scripts/check-ledger.ts && tsx scripts/check-data.ts",
-    "stress": "tsx scripts/stress-connections.ts"
+    "stress": "tsx scripts/stress-connections.ts",
+    "dev:admin": "tsx scripts/create-dev-admin.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

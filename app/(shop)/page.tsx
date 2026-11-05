@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
@@ -162,8 +163,13 @@ export default async function ShopHome(props: PageProps<"/">) {
       <section className="mx-auto mt-24 max-w-7xl px-4 sm:px-6">
         <div className="grid overflow-hidden rounded-[var(--radius-card)] bg-ink text-white md:grid-cols-[1.1fr_1fr]">
           <div className="relative min-h-64">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/scenes/cold-box.jpg" alt="Whole fish packed in ice inside an insulated box" className="absolute inset-0 size-full object-cover" />
+            <Image
+              src="/scenes/cold-box.jpg"
+              alt="Whole fish packed in ice inside an insulated box"
+              fill
+              sizes="(min-width: 1280px) 670px, (min-width: 768px) 52vw, 100vw"
+              className="object-cover"
+            />
           </div>
           <div className="p-7 sm:p-10">
             <h2 className="sign text-[clamp(34px,4vw,48px)] text-tarp">From the port to your pan</h2>

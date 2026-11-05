@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { AlertCircle, Ban } from "lucide-react";
 import { Button, Input } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/motion";
@@ -17,7 +16,6 @@ const QUICK_REASONS = [
 ];
 
 export function CancelOrderDialog({ code }: { code: string }) {
-  const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [selectedReason, setSelectedReason] = useState(QUICK_REASONS[0]);
@@ -39,8 +37,8 @@ export function CancelOrderDialog({ code }: { code: string }) {
         title: `Order ${code} cancelled`,
         description: "Your order was cancelled and items returned to stock.",
       });
+      // The action revalidates /track, so this page re-renders with the new status.
       setOpen(false);
-      router.refresh();
     });
   }
 

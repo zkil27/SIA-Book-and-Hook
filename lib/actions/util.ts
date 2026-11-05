@@ -41,6 +41,27 @@ export async function serializable<T>(run: (tx: Prisma.TransactionClient) => Pro
 /** Expected-condition error thrown inside a transaction to abort it. */
 export class UserError extends Error {}
 
-export function refreshAll() {
-  revalidatePath("/", "layout");
+/**
+ * What a write affects, so an action refreshes only those views instead of
+ * the whole app:
+ * - "admin":  every /admin page (the admin layout's badges included)
+ * - "orders": the customer's order views (/track, /account)
+ * - "shop":   storefront pages that show stock or price
+ * In a server action this also re-renders the page the user is on when it is
+ * one of these paths.
+ */
+export type Area = "admin" | "orders" | "shop";
+
+export function invalidate(...areas: Area[]) {
+  const set = new Set(areas);
+  if (set.has("admin")) revalidatePath("/admin", "layout");
+  if (set.has("orders")) {
+    revalidatePath("/track");
+    revalidatePath("/account");
+  }
+  if (set.has("shop")) {
+    revalidatePath("/", "page");
+    revalidatePath("/p/[id]", "page");
+    revalidatePath("/checkout");
+  }
 }

@@ -1,7 +1,9 @@
 import { PrismaClient } from '@prisma/client'
 
+// Opt-in SQL logging for performance work: set PRISMA_LOG=query to print every
+// statement Prisma sends (off by default; never enable it in production).
 const prismaClientSingleton = () => {
-  return new PrismaClient()
+  return new PrismaClient(process.env.PRISMA_LOG === 'query' ? { log: ['query'] } : undefined)
 }
 
 declare global {

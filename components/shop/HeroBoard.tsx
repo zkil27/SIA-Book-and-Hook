@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { ShopProduct } from "@/lib/catalog";
@@ -26,12 +27,15 @@ export function HeroBoard({ featured }: { featured: ShopProduct[] }) {
             }`}
           >
             {p.image && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={p.image}
                 alt=""
+                fill
+                sizes="(min-width: 1280px) 400px, (min-width: 640px) 33vw, 100vw"
+                // Above the fold: load now. The first card is the likely LCP image.
+                loading="eager"
                 fetchPriority={i === 0 ? "high" : "auto"}
-                className="size-full object-cover transition-transform duration-[900ms] ease-[var(--ease-out-expo)] group-hover:scale-[1.04]"
+                className="object-cover transition-transform duration-[900ms] ease-[var(--ease-out-expo)] group-hover:scale-[1.04]"
               />
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-ink/55 via-ink/0 to-ink/0" aria-hidden />

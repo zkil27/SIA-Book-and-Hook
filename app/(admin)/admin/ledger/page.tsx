@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { loadInventory, loadLedger } from "@/lib/admin-data";
+import { ledgerVariants, loadLedger } from "@/lib/admin-data";
 import { splitName } from "@/lib/meta";
 import { PageHeader } from "@/components/admin/kit";
 import { LedgerView } from "@/components/admin/LedgerView";
@@ -12,10 +12,15 @@ export default async function LedgerPage(props: PageProps<"/admin/ledger">) {
   const p = typeof sp.p === "string" && ["1", "7", "30", "all"].includes(sp.p) ? sp.p : v ? "all" : "30";
   const sinceDays = p === "all" ? undefined : p === "1" ? 0 : Number(p);
 
-  const [rows, inv] = await Promise.all([loadLedger({ variantId: v ?? undefined, sinceDays }), loadInventory()]);
-  const variants = inv.flatMap(prod =>
-    prod.variants.map(x => ({ id: x.id, label: `${splitName(prod.name).local} · ${x.name}${prod.active && x.active ? "" : " (archived)"}`, stock: x.stock }))
-  );
+  const [{ rows, truncated }, list] = await Promise.all([
+    loadLedger({ variantId: v ?? undefined, sinceDays }),
+    ledgerVariants(),
+  ]);
+  const variants = list.map(x => ({
+    id: x.id,
+    label: `${splitName(x.productName).local} · ${x.name}${x.archived ? " (archived)" : ""}`,
+    stock: x.stock,
+  }));
 
   return (
     <>
@@ -24,7 +29,7 @@ export default async function LedgerPage(props: PageProps<"/admin/ledger">) {
         sub="Every kilo in and out, with who, when and why. Balance is that item's stock right after each entry."
       />
       <Suspense>
-        <LedgerView rows={rows} variants={variants} variantId={v} period={p} />
+        <LedgerView rows={rows} truncated={truncated} variants={variants} variantId={v} period={p} />
       </Suspense>
     </>
   );

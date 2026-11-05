@@ -57,6 +57,8 @@ model Product {
   variants    ProductVariant[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+
+  @@index([categoryId]) // Postgres doesn't index foreign keys on its own
 }
 
 model ProductVariant {
@@ -72,6 +74,8 @@ model ProductVariant {
   orderItems     OrderItem[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+
+  @@index([productId])
 }
 
 model StockMovement {
@@ -87,6 +91,7 @@ model StockMovement {
   createdAt DateTime       @default(now()) // Append-only ledger
 
   @@index([variantId, createdAt])
+  @@index([orderId]) // an order's movements (cancel returns exactly what it holds)
 }
 
 model Order {
@@ -108,6 +113,9 @@ model Order {
   stockMovements      StockMovement[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
+
+  @@index([status, createdAt]) // admin tabs, dashboard, pending counts
+  @@index([customerId, createdAt]) // a customer's order history
 }
 
 model OrderItem {
@@ -118,6 +126,9 @@ model OrderItem {
   variant     ProductVariant @relation(fields: [variantId], references: [id])
   quantity    Int
   priceAtTime Int // Captured price in centavos at time of order
+
+  @@index([orderId])
+  @@index([variantId])
 }
 
 // Append-only order timeline: one row per status change. Never edited/deleted.

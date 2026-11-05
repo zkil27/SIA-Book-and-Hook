@@ -4,12 +4,15 @@ import { Anton, Geist, Geist_Mono, Permanent_Marker } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// Not preloaded: mono only appears in small codes and labels, so it can
+// arrive after first paint without delaying it.
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"], preload: false });
 // Heavy condensed gothic: matches the Hook & Box wordmark and Filipino
 // "taxi" sign-painter lettering.
 const anton = Anton({ variable: "--font-anton", weight: "400", subsets: ["latin"] });
 // Marker-on-cardboard numerals for price cards.
-const marker = Permanent_Marker({ variable: "--font-marker-face", weight: "400", subsets: ["latin"] });
+// Not preloaded: only used for price numerals and order codes.
+const marker = Permanent_Marker({ variable: "--font-marker-face", weight: "400", subsets: ["latin"], preload: false });
 
 export const metadata: Metadata = {
   title: { default: "Hook & Box — Fresh Seafood, Dasmariñas", template: "%s · Hook & Box" },

@@ -25,8 +25,21 @@ Connection string → URI. You'll see pooled and direct options.
 
 | Variable | Which string | Port | Used for |
 |---|---|---|---|
-| `DATABASE_URL` | Transaction pooler, with `?pgbouncer=true` appended | 6543 | The app at runtime |
+| `DATABASE_URL` | Transaction pooler, with `?pgbouncer=true&connect_timeout=5&pool_timeout=10` appended | 6543 | The app at runtime |
 | `DIRECT_URL` | Direct connection | 5432 | Migrations only |
+
+`connect_timeout` and `pool_timeout` (seconds) make a paused or unreachable
+database fail fast, so the storefront switches to its offline catalog in a few
+seconds instead of waiting on Prisma's defaults. Don't add `connection_limit=1`:
+it would make each request's parallel queries run one at a time.
+
+Other environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `NEXTAUTH_SECRET`, `NEXTAUTH_URL` | Auth (see `.env.example`). |
+| `DEV_EMAILS` | Comma-separated ADMIN emails allowed into `/admin/dev` (developer tools). Empty = off. See `docs/dev-tools.md`. |
+| `PRISMA_LOG` | Optional, `query` prints every SQL statement. Local performance work only; never set it in Vercel. |
 
 Migrations **cannot** run through the pooler. If you use only the pooled string,
 `prisma migrate` fails with an error that reads like a Prisma bug but is a
@@ -72,6 +85,29 @@ new required columns can be added; the reseed then replaces them. Demo accounts
 after seeding: `admin@hookandbox.ph / admin123`, `clerk@hookandbox.ph / clerk123`
 (both staff) and `maria@example.com / customer123`.
 
+### 2026-11-05: query indexes
+
+`prisma/migrations/20261105000000_add_query_indexes` adds seven indexes
+(foreign keys and the order status/date columns pages filter on). It only runs
+`CREATE INDEX`, so no data changes and no reseed is needed:
+
+```bash
+npx prisma migrate deploy
+```
+
+The migration was written to match `prisma migrate diff` output exactly, so a
+later `migrate dev` sees no drift. Use `migrate deploy` against the shared
+Supabase database, never `migrate dev` (it can offer to reset on drift).
+
+### Developer admin account
+
+To use `/admin/dev` on the live site, create an ADMIN account with your own
+email and password, then list the email in `DEV_EMAILS`:
+
+```powershell
+$env:DEV_ADMIN_EMAIL="you@example.com"; $env:DEV_ADMIN_PASSWORD="12+ characters"; npm run dev:admin
+```
+
 On Windows, stop `npm run dev` before `npx prisma generate`: the dev server locks
 the Prisma engine file and generate fails with `EPERM … rename`.
 
@@ -97,6 +133,24 @@ console output alone has burned people.
 4. Deploy. Open the live URL. Confirm it renders real rows from the database,
    not just a page that builds.
 
+### Function region
+
+`vercel.json` sets `"regions": ["sin1"]` so server code runs in Singapore, the
+same region as the Supabase project. Without it Vercel uses its default region
+(Washington, D.C., `iad1`) and every query crosses the Pacific, roughly 200 ms
+each, several per page. If the project settings (Settings → Functions) name a
+different region, `vercel.json` wins on the next deploy. Check the result on
+`/admin/dev`: "Region check" should say **Same region**. If the Supabase project
+is ever moved, update both.
+
+### Images
+
+Pages use `next/image`, so Vercel resizes photos to the displayed width and
+serves AVIF/WebP. Optimised variants are cached; the Hobby plan includes a
+monthly image-optimisation allowance that this catalog (~30 photos × a few
+widths) stays far under. If the allowance is ever exceeded, Vercel serves the
+original files and the site still works.
+
 ## 5. Keep-alive cron & Offline Resilience
 
 Supabase pauses free projects after about 7 days of low database activity. During
@@ -115,7 +169,8 @@ during presentations or local development if Supabase happens to be paused or un
 `lib/catalog.ts` catches database failures and falls back to the static catalog definition
 (`lib/catalog-data.ts`, the same data the seed uses), logging a console warning. The
 storefront shows a yellow "stock system is offline" banner and disables ordering in that
-mode. The admin shows a "Database is offline" panel with restore instructions instead.
+mode. In the admin, the shell and navigation still load and each page shows "This page
+couldn't load" with restore instructions and a Try again button (`app/(admin)/admin/error.tsx`).
 
 Set up the keep-alive cron for production:
 

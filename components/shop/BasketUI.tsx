@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { motion, useAnimate, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useSyncExternalStore } from "react";
@@ -176,12 +177,9 @@ export function BasketSheet() {
                 <Link
                   href={`/p/${item.productId}`}
                   onClick={() => setOpen(false)}
-                  className="size-16 shrink-0 overflow-hidden rounded-lg bg-ice-2"
+                  className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-ice-2"
                 >
-                  {item.image && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.image} alt="" className="size-full object-cover" />
-                  )}
+                  {item.image && <Image src={item.image} alt="" fill sizes="64px" className="object-cover" />}
                 </Link>
                 <div className="flex min-w-0 flex-1 flex-col">
                   <div className="flex items-start justify-between gap-2">

@@ -76,6 +76,19 @@ The only thing separating the two is a label on their account called a **role**
 (either `CUSTOMER` or `ADMIN`). If a customer tries to open an admin page, they
 get bounced out.
 
+A few behaviours worth knowing (2026-11-05):
+
+- **Cancelling an order needs a sign-in.** On the tracking page, a signed-out
+  visitor sees "Sign in to cancel" instead of the Cancel button, and only the
+  order's own customer (or staff) can cancel it.
+- **The stock ledger page shows the newest 300 entries** for the chosen item and
+  period, with a note when there are more. Pick an item or a shorter period to
+  see older entries. Balances are always exact.
+- **Pages show a skeleton immediately** while their data loads, in both the
+  storefront and the admin, and links preload in the background.
+- **Developers** (not staff) have a hidden tools section at `/admin/dev`; see
+  `docs/dev-tools.md`.
+
 ---
 
 ## 4. How the information is organized (the database, in plain words)
@@ -230,7 +243,9 @@ If someone says "show me where X is," here's the map:
 | `prisma/schema.prisma` | The definition of the eight buckets. The single source of truth for the data. |
 | `prisma/seed.ts` | Fills the database with the catalog, demo accounts and a believable week of orders and stock history. This file doubles as our **backup**. |
 | `lib/catalog-data.ts` | The catalog itself (names, prices, photos, dishes), shared by the seed and the offline fallback. |
-| `lib/catalog.ts` / `lib/admin-data.ts` | Read the data for the storefront and the admin; stock is always the sum of the ledger. |
+| `lib/catalog.ts` / `lib/admin-data.ts` | Read the data for the storefront and the admin; stock is always the sum of the ledger, added up by the database (`lib/stock-sql.ts`). |
+| `lib/orders-core.ts` | The order-writing logic shared by checkout, staff cancellation and the dev test scenarios. |
+| `app/(admin)/admin/dev/` | Developer tools (hidden, allowlisted): health, checks, timings, test orders, UI gallery. |
 | `lib/actions/` | Everything that changes data (checkout, order status, stock, prices, products) — each stock change is a new ledger row. |
 | `lib/prisma.ts` | The one safe way our code talks to the database. |
 | `auth.ts` / `auth.config.ts` / `proxy.ts` | Login, roles, and the gate that keeps customers out of `/admin`. |

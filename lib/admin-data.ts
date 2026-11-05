@@ -1,7 +1,9 @@
 import "server-only";
 import { cache } from "react";
+import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { ageInDays, oldestRemainingAt } from "@/lib/ledger";
+import { ageInDays } from "@/lib/ledger";
+import { oldestInflowByVariant, stockByVariant } from "@/lib/stock-sql";
 import { imageForName } from "@/lib/catalog-data";
 import { LOW_STOCK_AT, orderCode, stockState, TO_SALE_AFTER_DAYS, type OrderStatusKey } from "@/lib/meta";
 import { DAY_MS, daysAgo, startOfShopDay } from "@/lib/time";
@@ -31,29 +33,32 @@ export type InvProduct = {
   variants: InvVariant[];
 };
 
-/** Every product and variant (archived included) with ledger-derived stock. */
-export const loadInventory = cache(async (): Promise<InvProduct[]> => {
-  const rows = await prisma.product.findMany({
-    include: {
-      category: true,
-      variants: {
-        orderBy: { priceCentavos: "desc" },
-        include: { stockMovements: { select: { quantity: true, createdAt: true } } },
-      },
-    },
-    orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
-  });
-  const today = startOfShopDay();
-  return rows.map(p => ({
+const productSelect = {
+  id: true,
+  name: true,
+  description: true,
+  imageUrl: true,
+  active: true,
+  category: { select: { id: true, name: true, slug: true } },
+  variants: {
+    orderBy: { priceCentavos: "desc" as const },
+    select: { id: true, name: true, sku: true, priceCentavos: true, active: true, priceUpdatedAt: true },
+  },
+} satisfies Prisma.ProductSelect;
+
+type ProductRow = Prisma.ProductGetPayload<{ select: typeof productSelect }>;
+
+function shapeProduct(p: ProductRow, stock: Map<string, number>, oldest: Map<string, Date>, today: Date): InvProduct {
+  return {
     id: p.id,
     name: p.name,
     description: p.description,
     image: p.imageUrl ?? imageForName(p.name),
     active: p.active,
-    category: { id: p.category.id, name: p.category.name, slug: p.category.slug },
+    category: p.category,
     variants: p.variants.map(v => {
-      const stock = v.stockMovements.reduce((s, m) => s + m.quantity, 0);
-      const oldestDays = stock > 0 ? ageInDays(oldestRemainingAt(v.stockMovements)) : null;
+      const s = stock.get(v.id) ?? 0;
+      const oldestDays = s > 0 ? ageInDays(oldest.get(v.id) ?? null) : null;
       return {
         id: v.id,
         productId: p.id,
@@ -61,14 +66,41 @@ export const loadInventory = cache(async (): Promise<InvProduct[]> => {
         sku: v.sku,
         price: v.priceCentavos,
         active: v.active,
-        stock,
+        stock: s,
         oldestDays,
-        toSale: stock > 0 && (oldestDays ?? 0) >= TO_SALE_AFTER_DAYS,
+        toSale: s > 0 && (oldestDays ?? 0) >= TO_SALE_AFTER_DAYS,
         priceChangedToday: !!v.priceUpdatedAt && v.priceUpdatedAt >= today,
       };
     }),
-  }));
-});
+  };
+}
+
+/**
+ * Every product and variant (archived included) with ledger-derived stock.
+ * Stock and FIFO age are aggregated in SQL (lib/stock-sql.ts); no ledger rows
+ * are loaded. Uncached: dev timing probes call this directly.
+ */
+export async function loadInventoryUncached(): Promise<InvProduct[]> {
+  const [rows, stock, oldest] = await Promise.all([
+    prisma.product.findMany({ select: productSelect, orderBy: [{ category: { name: "asc" } }, { name: "asc" }] }),
+    stockByVariant(prisma),
+    oldestInflowByVariant(prisma),
+  ]);
+  const today = startOfShopDay();
+  return rows.map(p => shapeProduct(p, stock, oldest, today));
+}
+
+/** Per-request deduplicated inventory (layout and page share one read). */
+export const loadInventory = cache(loadInventoryUncached);
+
+/** One product with its variants' stock, for the product editor. */
+export async function loadProduct(id: string): Promise<InvProduct | null> {
+  const p = await prisma.product.findUnique({ where: { id }, select: productSelect });
+  if (!p) return null;
+  const ids = p.variants.map(v => v.id);
+  const [stock, oldest] = await Promise.all([stockByVariant(prisma, ids), oldestInflowByVariant(prisma, ids)]);
+  return shapeProduct(p, stock, oldest, startOfShopDay());
+}
 
 /** Flat list of sellable variants (active product and variant). */
 export function sellable(inv: InvProduct[]) {
@@ -81,11 +113,10 @@ export type SellableVariant = ReturnType<typeof sellable>[number];
 
 // ── Counts for the rail / inbox ─────────────────────────────────────────────
 
-export const getAdminCounts = cache(async () => {
-  const [inv, pending] = await Promise.all([
-    loadInventory(),
-    prisma.order.count({ where: { status: "PENDING" } }),
-  ]);
+export type AdminCounts = { pending: number; out: number; low: number; toSale: number };
+
+async function countsWith(load: () => Promise<InvProduct[]>): Promise<AdminCounts> {
+  const [inv, pending] = await Promise.all([load(), prisma.order.count({ where: { status: "PENDING" } })]);
   const vs = sellable(inv);
   return {
     pending,
@@ -93,61 +124,76 @@ export const getAdminCounts = cache(async () => {
     low: vs.filter(v => stockState(v.stock) === "low").length,
     toSale: vs.filter(v => v.toSale).length,
   };
-});
+}
+
+export const getAdminCounts = cache(() => countsWith(loadInventory));
+export const getAdminCountsUncached = () => countsWith(loadInventoryUncached);
 
 // ── Dashboard ───────────────────────────────────────────────────────────────
 
-export async function getDashboard() {
+export async function getDashboard(load: () => Promise<InvProduct[]> = loadInventory) {
   const today = startOfShopDay();
   const weekStart = daysAgo(6);
-  const [todayOrders, weekOrders, pendingOrders, inv] = await Promise.all([
-    prisma.order.findMany({
-      where: { createdAt: { gte: today }, status: { not: "CANCELLED" } },
-      select: { totalCentavos: true },
+  const open = { status: { not: "CANCELLED" as const } };
+  const [todayAgg, weekOrders, sellerRows, pendingCount, pendingOrders, inv] = await Promise.all([
+    prisma.order.aggregate({
+      where: { createdAt: { gte: today }, ...open },
+      _count: { _all: true },
+      _sum: { totalCentavos: true },
     }),
     prisma.order.findMany({
-      where: { createdAt: { gte: weekStart }, status: { not: "CANCELLED" } },
-      select: {
-        createdAt: true,
-        totalCentavos: true,
-        items: { select: { quantity: true, priceAtTime: true, variant: { select: { product: { select: { name: true } } } } } },
-      },
+      where: { createdAt: { gte: weekStart }, ...open },
+      select: { createdAt: true, totalCentavos: true },
     }),
+    prisma.$queryRaw<{ name: string; qty: bigint; revenue: bigint }[]>`
+      SELECT p."name", SUM(oi."quantity")::bigint AS qty, SUM(oi."quantity" * oi."priceAtTime")::bigint AS revenue
+      FROM "OrderItem" oi
+      JOIN "Order" o ON o."id" = oi."orderId"
+      JOIN "ProductVariant" v ON v."id" = oi."variantId"
+      JOIN "Product" p ON p."id" = v."productId"
+      WHERE o."createdAt" >= ${weekStart} AND o."status" <> 'CANCELLED'
+      GROUP BY p."name"
+      ORDER BY revenue DESC
+      LIMIT 5
+    `,
+    prisma.order.count({ where: { status: "PENDING" } }),
     prisma.order.findMany({
       where: { status: "PENDING" },
       orderBy: { createdAt: "asc" },
       take: 8,
-      include: { customer: { select: { name: true } }, items: { select: { quantity: true } } },
+      select: {
+        id: true,
+        orderNumber: true,
+        deliveryName: true,
+        deliverySlot: true,
+        totalCentavos: true,
+        createdAt: true,
+        customer: { select: { name: true } },
+        items: { select: { quantity: true } },
+      },
     }),
-    loadInventory(),
+    load(),
   ]);
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const start = new Date(weekStart.getTime() + i * DAY_MS);
     return { start, revenue: 0, orders: 0 };
   });
-  const sellers = new Map<string, { name: string; qty: number; revenue: number }>();
   for (const o of weekOrders) {
     const idx = Math.floor((o.createdAt.getTime() - weekStart.getTime()) / DAY_MS);
     if (days[idx]) {
       days[idx].revenue += o.totalCentavos;
       days[idx].orders += 1;
     }
-    for (const it of o.items) {
-      const name = it.variant.product.name;
-      const s = sellers.get(name) ?? { name, qty: 0, revenue: 0 };
-      s.qty += it.quantity;
-      s.revenue += it.quantity * it.priceAtTime;
-      sellers.set(name, s);
-    }
   }
 
   const vs = sellable(inv);
   return {
-    todayCount: todayOrders.length,
-    todayRevenue: todayOrders.reduce((s, o) => s + o.totalCentavos, 0),
+    todayCount: todayAgg._count._all,
+    todayRevenue: todayAgg._sum.totalCentavos ?? 0,
     days,
-    topSellers: [...sellers.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5),
+    topSellers: sellerRows.map(r => ({ name: r.name, qty: Number(r.qty), revenue: Number(r.revenue) })),
+    pendingCount,
     pendingOrders: pendingOrders.map(o => ({
       id: o.id,
       code: orderCode(o.orderNumber),
@@ -165,23 +211,19 @@ export async function getDashboard() {
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
-export type AdminOrder = Awaited<ReturnType<typeof listOrders>>[number];
+const orderInclude = {
+  customer: { select: { name: true, email: true } },
+  items: { include: { variant: { include: { product: { select: { name: true, imageUrl: true } } } } } },
+  statusEvents: {
+    orderBy: { createdAt: "asc" as const },
+    include: { actor: { select: { name: true, role: true } } },
+  },
+} satisfies Prisma.OrderInclude;
 
-export async function listOrders(status: OrderStatusKey | "ALL") {
-  const rows = await prisma.order.findMany({
-    where: status === "ALL" ? {} : { status },
-    orderBy: [{ createdAt: "desc" }],
-    take: 200,
-    include: {
-      customer: { select: { name: true, email: true } },
-      items: { include: { variant: { include: { product: { select: { name: true, imageUrl: true } } } } } },
-      statusEvents: {
-        orderBy: { createdAt: "asc" },
-        include: { actor: { select: { name: true, role: true } } },
-      },
-    },
-  });
-  return rows.map(o => ({
+type OrderRow = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
+
+function shapeAdminOrder(o: OrderRow) {
+  return {
     id: o.id,
     code: orderCode(o.orderNumber),
     status: o.status as OrderStatusKey,
@@ -214,7 +256,25 @@ export async function listOrders(status: OrderStatusKey | "ALL") {
       note: e.note,
       actor: e.actor ? (e.actor.role === "ADMIN" ? e.actor.name ?? "Staff" : "Customer") : "System",
     })),
-  }));
+  };
+}
+
+export type AdminOrder = ReturnType<typeof shapeAdminOrder>;
+
+export async function listOrders(status: OrderStatusKey | "ALL"): Promise<AdminOrder[]> {
+  const rows = await prisma.order.findMany({
+    where: status === "ALL" ? {} : { status },
+    orderBy: [{ createdAt: "desc" }],
+    take: 200,
+    include: orderInclude,
+  });
+  return rows.map(shapeAdminOrder);
+}
+
+/** One order by its number (for `?open=HB-0005` links into another tab). */
+export async function getAdminOrder(orderNumber: number): Promise<AdminOrder | null> {
+  const row = await prisma.order.findUnique({ where: { orderNumber }, include: orderInclude });
+  return row ? shapeAdminOrder(row) : null;
 }
 
 export async function orderCounts(): Promise<Record<OrderStatusKey | "ALL", number>> {
@@ -255,38 +315,83 @@ function kindOf(reason: string, qty: number): LedgerRow["kind"] {
   return "other";
 }
 
-export async function loadLedger(opts: { variantId?: string; sinceDays?: number }) {
+export const LEDGER_LIMIT = 300;
+
+/**
+ * Newest-first ledger rows with each variant's running balance. The balance
+ * is a window sum over that variant's full history (inner query), and the
+ * period filter and row limit apply afterwards, so balances stay exact.
+ */
+export async function loadLedger(opts: {
+  variantId?: string;
+  sinceDays?: number;
+}): Promise<{ rows: LedgerRow[]; truncated: boolean }> {
   const since = opts.sinceDays !== undefined ? daysAgo(opts.sinceDays) : undefined;
-  // Balances need every earlier movement, so read the full history per scope.
-  const rows = await prisma.stockMovement.findMany({
-    where: opts.variantId ? { variantId: opts.variantId } : {},
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    include: {
-      variant: { select: { name: true, sku: true, product: { select: { name: true } } } },
-      order: { select: { orderNumber: true } },
-      actor: { select: { name: true } },
-    },
-  });
-  const running = new Map<string, number>();
-  const out: LedgerRow[] = [];
-  for (const m of rows) {
-    const bal = (running.get(m.variantId) ?? 0) + m.quantity;
-    running.set(m.variantId, bal);
-    if (since && m.createdAt < since) continue;
-    out.push({
-      id: m.id,
-      variantId: m.variantId,
-      product: m.variant.product.name,
-      variant: m.variant.name,
-      sku: m.variant.sku,
-      quantity: m.quantity,
-      reason: m.reason,
-      kind: kindOf(m.reason, m.quantity),
-      orderCode: m.order ? orderCode(m.order.orderNumber) : null,
-      actor: m.actor?.name ?? (m.orderId ? "Checkout" : "System"),
-      at: m.createdAt.toISOString(),
-      balance: bal,
-    });
-  }
-  return out.reverse(); // newest first
+  const scope = opts.variantId ? Prisma.sql`WHERE sm."variantId" = ${opts.variantId}` : Prisma.empty;
+  const period = since ? Prisma.sql`WHERE m."createdAt" >= ${since}` : Prisma.empty;
+  const raw = await prisma.$queryRaw<
+    {
+      id: string;
+      variantId: string;
+      quantity: number;
+      reason: string;
+      orderId: string | null;
+      createdAt: Date;
+      balance: number;
+      variantName: string;
+      sku: string;
+      productName: string;
+      orderNumber: number | null;
+      actorName: string | null;
+    }[]
+  >`
+    SELECT m."id", m."variantId", m."quantity", m."reason", m."orderId", m."createdAt", m.balance::int AS balance,
+      v."name" AS "variantName", v."sku", p."name" AS "productName", o."orderNumber", a."name" AS "actorName"
+    FROM (
+      SELECT sm.*, SUM(sm."quantity") OVER (PARTITION BY sm."variantId" ORDER BY sm."createdAt", sm."id") AS balance
+      FROM "StockMovement" sm
+      ${scope}
+    ) m
+    JOIN "ProductVariant" v ON v."id" = m."variantId"
+    JOIN "Product" p ON p."id" = v."productId"
+    LEFT JOIN "Order" o ON o."id" = m."orderId"
+    LEFT JOIN "User" a ON a."id" = m."actorId"
+    ${period}
+    ORDER BY m."createdAt" DESC, m."id" DESC
+    LIMIT ${LEDGER_LIMIT + 1}
+  `;
+  const truncated = raw.length > LEDGER_LIMIT;
+  const rows = raw.slice(0, LEDGER_LIMIT).map(m => ({
+    id: m.id,
+    variantId: m.variantId,
+    product: m.productName,
+    variant: m.variantName,
+    sku: m.sku,
+    quantity: m.quantity,
+    reason: m.reason,
+    kind: kindOf(m.reason, m.quantity),
+    orderCode: m.orderNumber !== null ? orderCode(m.orderNumber) : null,
+    actor: m.actorName ?? (m.orderId ? "Checkout" : "System"),
+    at: m.createdAt.toISOString(),
+    balance: m.balance,
+  }));
+  return { rows, truncated };
+}
+
+/** Light variant list for the ledger filter (no inventory aggregation beyond stock). */
+export async function ledgerVariants() {
+  const [rows, stock] = await Promise.all([
+    prisma.productVariant.findMany({
+      select: { id: true, name: true, active: true, product: { select: { name: true, active: true } } },
+      orderBy: [{ product: { category: { name: "asc" } } }, { product: { name: "asc" } }, { priceCentavos: "desc" }],
+    }),
+    stockByVariant(prisma),
+  ]);
+  return rows.map(v => ({
+    id: v.id,
+    productName: v.product.name,
+    name: v.name,
+    archived: !(v.product.active && v.active),
+    stock: stock.get(v.id) ?? 0,
+  }));
 }

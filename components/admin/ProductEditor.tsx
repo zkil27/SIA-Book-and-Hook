@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -132,10 +133,9 @@ export function ProductEditor({
                   onClick={() => setImageUrl(src === imageUrl ? "" : src)}
                   aria-pressed={src === imageUrl}
                   aria-label={src.split("/").pop()}
-                  className={`aspect-square overflow-hidden rounded-lg ring-inset transition-[box-shadow,transform] ${src === imageUrl ? "ring-3 ring-teal-deep" : "ring-1 ring-ice-3 hover:scale-[1.04]"}`}
+                  className={`relative aspect-square overflow-hidden rounded-lg ring-inset transition-[box-shadow,transform] ${src === imageUrl ? "ring-3 ring-teal-deep" : "ring-1 ring-ice-3 hover:scale-[1.04]"}`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt="" className="size-full object-cover" />
+                  <Image src={src} alt="" fill sizes="96px" className="object-cover" />
                 </button>
               ))}
             </div>
@@ -227,10 +227,7 @@ export function ProductEditor({
         <p className="mb-3 text-[12px] font-bold uppercase tracking-wider text-ink-3">Storefront preview</p>
         <div className="group">
           <div className="relative aspect-[4/3] overflow-hidden rounded-[var(--radius-card)] bg-ice-2">
-            {imageUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt="" className="size-full object-cover" />
-            )}
+            {imageUrl && <Image src={imageUrl} alt="" fill sizes="(min-width: 1024px) 360px, 100vw" className="object-cover" />}
             <div className="absolute left-3 top-3">
               <PriceTag name={splitName(name || "Product name").local} price={previewPrice} unit={unitFor(preview?.name || "kg")} tilt={tiltFor(name || "x")} size="sm" />
             </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   ArrowRight,
@@ -22,6 +22,7 @@ import {
   ShoppingBag,
   Store,
   Tags,
+  Wrench,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +32,99 @@ import { logoutAction } from "@/lib/actions/auth";
 
 export type Counts = { pending: number; out: number; low: number; toSale: number };
 export type PaletteItem = { label: string; hint?: string; href: string; group: string; keywords?: string; icon?: LucideIcon };
+
+/**
+ * Badge counts and search-palette data. The layout passes this as an
+ * un-awaited promise so the shell and page render without waiting on it; the
+ * badges and palette fill in when it resolves. One compact row per variant,
+ * expanded into stock / walk-in / ledger actions here on the client.
+ */
+export type ShellData = {
+  counts: Counts;
+  orders: { code: string; number: number; name: string; status: string }[];
+  variants: { id: string; label: string; sku: string; stock: number }[];
+  products: { id: string; name: string; active: boolean; category: string }[];
+};
+
+const DEV_PAGES: PaletteItem[] = [
+  { label: "Dev · Overview", href: "/admin/dev", group: "Developer", hint: "g d", keywords: "developer health region latency", icon: Wrench },
+  { label: "Dev · Checks and timing", href: "/admin/dev/checks", group: "Developer", keywords: "developer integrity ledger probes performance", icon: Wrench },
+  { label: "Dev · Test scenarios", href: "/admin/dev/scenarios", group: "Developer", keywords: "developer test orders rush cleanup", icon: Wrench },
+  { label: "Dev · UI gallery", href: "/admin/dev/gallery", group: "Developer", keywords: "developer components states", icon: Wrench },
+];
+
+function expandPalette(d: ShellData, isDev: boolean): PaletteItem[] {
+  return [
+    ...d.orders.map(o => ({
+      label: `${o.code} · ${o.name}`,
+      hint: o.status,
+      href: `/admin/orders?open=${o.code}`,
+      group: "Orders to handle",
+      keywords: `${o.code} ${o.number}`,
+    })),
+    ...d.variants.map(v => ({
+      label: `Adjust stock · ${v.label}`,
+      hint: `${v.stock} on hand`,
+      href: `/admin/stock?v=${v.id}`,
+      group: "Stock",
+      keywords: v.sku,
+    })),
+    ...d.variants.map(v => ({
+      label: `Walk-in sale · ${v.label}`,
+      href: `/admin/stock?mode=walkin&v=${v.id}`,
+      group: "Walk-in sale",
+      keywords: `${v.sku} sell counter`,
+    })),
+    ...d.variants.map(v => ({
+      label: `Ledger · ${v.label}`,
+      href: `/admin/ledger?v=${v.id}`,
+      group: "Stock ledger",
+      keywords: `${v.sku} history movements`,
+    })),
+    ...d.products.map(p => ({
+      label: `Edit · ${p.name}${p.active ? "" : " (archived)"}`,
+      href: `/admin/products/${p.id}`,
+      group: "Products",
+      keywords: p.category,
+    })),
+    ...(isDev ? DEV_PAGES : []),
+  ];
+}
+
+/** Nav badge that waits for the shell data without blocking the nav itself. */
+function NavBadge({ data, item, compact = false }: { data: Promise<ShellData>; item: NavItem; compact?: boolean }) {
+  const { counts } = use(data);
+  const badge = item.badge?.(counts);
+  if (!badge) return null;
+  const tone = badge.tone === "yellow" ? "bg-tarp text-ink" : "bg-marker text-white";
+  return compact ? (
+    <span
+      className={`tabular absolute -right-2.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-bold ${tone}`}
+    >
+      {badge.n}
+    </span>
+  ) : (
+    <span className={`tabular relative ml-auto grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-bold ${tone}`}>
+      {badge.n}
+    </span>
+  );
+}
+
+function PaletteWithData({
+  data,
+  isDev,
+  open,
+  onClose,
+}: {
+  data: Promise<ShellData>;
+  isDev: boolean;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const d = use(data);
+  const items = useMemo(() => expandPalette(d, isDev), [d, isDev]);
+  return <CommandPalette open={open} onClose={onClose} items={items} />;
+}
 
 type NavItem = { href: string; label: string; icon: LucideIcon; keys: string; badge?: (c: Counts) => { n: number; tone: "yellow" | "red" } | null };
 
@@ -91,14 +185,15 @@ function isTyping(e: KeyboardEvent) {
 
 export function AdminShell({
   children,
-  counts,
-  palette,
+  data,
   userName,
+  isDev = false,
 }: {
   children: ReactNode;
-  counts: Counts;
-  palette: PaletteItem[];
+  data: Promise<ShellData>;
   userName: string;
+  /** Allowlisted developer (DEV_EMAILS): shows the Dev link, palette entries and `g d`. */
+  isDev?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -125,7 +220,8 @@ export function AdminShell({
       if (pendingG.current !== null) {
         window.clearTimeout(pendingG.current);
         pendingG.current = null;
-        const dest = GO[e.key.toLowerCase()];
+        const key = e.key.toLowerCase();
+        const dest = GO[key] ?? (isDev && key === "d" ? "/admin/dev" : undefined);
         if (dest) {
           e.preventDefault();
           router.push(dest);
@@ -148,7 +244,7 @@ export function AdminShell({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router]);
+  }, [router, isDev]);
 
   const isActive = (href: string) => (href === "/admin" ? pathname === "/admin" : pathname.startsWith(href));
 
@@ -176,7 +272,6 @@ export function AdminShell({
         <nav className="flex flex-1 flex-col gap-0.5 px-3" aria-label="Admin">
           {NAV.map(item => {
             const active = isActive(item.href);
-            const badge = item.badge?.(counts);
             return (
               <Link
                 key={item.href}
@@ -195,20 +290,27 @@ export function AdminShell({
                 )}
                 <item.icon className="relative size-[18px]" aria-hidden />
                 <span className="relative">{item.label}</span>
-                {badge && (
-                  <span
-                    className={`tabular relative ml-auto grid h-5 min-w-5 place-items-center rounded-full px-1.5 text-[11px] font-bold ${
-                      badge.tone === "yellow" ? "bg-tarp text-ink" : "bg-marker text-white"
-                    }`}
-                  >
-                    {badge.n}
-                  </span>
+                {item.badge && (
+                  <Suspense fallback={null}>
+                    <NavBadge data={data} item={item} />
+                  </Suspense>
                 )}
               </Link>
             );
           })}
         </nav>
         <div className="flex flex-col gap-1 border-t border-ice-3 p-3">
+          {isDev && (
+            <Link
+              href="/admin/dev"
+              aria-current={isActive("/admin/dev") ? "page" : undefined}
+              className={`flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-semibold hover:bg-ice hover:text-ink ${
+                isActive("/admin/dev") ? "bg-ink text-white hover:bg-ink hover:text-white" : "text-ink-2"
+              }`}
+            >
+              <Wrench className="size-4" aria-hidden /> Dev tools <Kbd>g d</Kbd>
+            </Link>
+          )}
           <Link href="/" className="flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-semibold text-ink-2 hover:bg-ice hover:text-ink">
             <Store className="size-4" aria-hidden /> View storefront
           </Link>
@@ -249,7 +351,6 @@ export function AdminShell({
       >
         {[NAV[0], NAV[1], NAV[2], NAV[4]].map(item => {
           const active = isActive(item.href);
-          const badge = item.badge?.(counts);
           return (
             <Link
               key={item.href}
@@ -259,14 +360,10 @@ export function AdminShell({
             >
               <span className="relative">
                 <item.icon className="size-[22px]" aria-hidden />
-                {badge && (
-                  <span
-                    className={`tabular absolute -right-2.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-bold ${
-                      badge.tone === "yellow" ? "bg-tarp text-ink" : "bg-marker text-white"
-                    }`}
-                  >
-                    {badge.n}
-                  </span>
+                {item.badge && (
+                  <Suspense fallback={null}>
+                    <NavBadge data={data} item={item} compact />
+                  </Suspense>
                 )}
               </span>
               {item.label === "Today's prices" ? "Prices" : item.label}
@@ -303,6 +400,11 @@ export function AdminShell({
               <Link href="/admin/stock?mode=walkin" className="flex h-12 items-center gap-3 rounded-lg px-3 font-semibold text-ink hover:bg-ice">
                 <Scale className="size-5 text-ink-2" aria-hidden /> Walk-in sale
               </Link>
+              {isDev && (
+                <Link href="/admin/dev" className="flex h-12 items-center gap-3 rounded-lg px-3 font-semibold text-ink hover:bg-ice">
+                  <Wrench className="size-5 text-ink-2" aria-hidden /> Dev tools
+                </Link>
+              )}
               <Link href="/" className="flex h-12 items-center gap-3 rounded-lg px-3 font-semibold text-ink hover:bg-ice">
                 <Store className="size-5 text-ink-2" aria-hidden /> View storefront
               </Link>
@@ -316,8 +418,12 @@ export function AdminShell({
         )}
       </AnimatePresence>
 
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={palette} />
-      <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <Suspense
+        fallback={<CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={isDev ? DEV_PAGES : []} />}
+      >
+        <PaletteWithData data={data} isDev={isDev} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      </Suspense>
+      <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} isDev={isDev} />
     </div>
   );
 }
@@ -569,7 +675,8 @@ function CommandPalette({ open, onClose, items }: { open: boolean; onClose: () =
   );
 }
 
-function ShortcutHelp({ open, onClose }: { open: boolean; onClose: () => void }) {
+function ShortcutHelp({ open, onClose, isDev }: { open: boolean; onClose: () => void; isDev: boolean }) {
+  const shortcuts: [string, string][] = isDev ? [...SHORTCUTS.slice(0, -1), ["g d", "Dev tools"], SHORTCUTS[SHORTCUTS.length - 1]] : SHORTCUTS;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -598,7 +705,7 @@ function ShortcutHelp({ open, onClose }: { open: boolean; onClose: () => void })
               </button>
             </div>
             <dl className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-6 gap-y-2.5 text-sm">
-              {SHORTCUTS.map(([k, d]) => (
+              {shortcuts.map(([k, d]) => (
                 <div key={k} className="contents">
                   <dt className="flex gap-1">
                     {k.split(" ").map((p, i) => (p === "/" && k.includes("K") ? <span key={i} className="text-ink-3">or</span> : <Kbd key={i}>{p}</Kbd>))}

@@ -1,18 +1,52 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
-import { CloudOff } from "lucide-react";
 import { getShopCatalog } from "@/lib/catalog";
 import { getUser } from "@/lib/session";
 import { splitName, unitFor } from "@/lib/meta";
 import { Logo } from "@/components/brand/Logo";
 import { BasketProvider } from "@/components/shop/basket";
+import { OfflineBanner } from "@/components/shop/OfflineBanner";
 import { ShopHeader } from "@/components/shop/ShopHeader";
 import { TarpCrawl } from "@/components/shop/TarpCrawl";
 import { ToastProvider } from "@/components/ui/toast";
 
-export default async function ShopLayout({ children }: { children: ReactNode }) {
-  const [catalog, user] = await Promise.all([getShopCatalog(), getUser()]);
+/**
+ * The layout itself awaits nothing: the price crawl, the signed-in header and
+ * the offline banner each stream in behind their own Suspense boundary, so
+ * pages (and their loading skeleton) start rendering immediately.
+ */
+export default function ShopLayout({ children }: { children: ReactNode }) {
+  return (
+    <ToastProvider>
+      <BasketProvider>
+        <Suspense fallback={<div className="h-10 bg-tarp" aria-hidden />}>
+          <PriceCrawl />
+        </Suspense>
+        <Suspense fallback={<div className="h-16 border-b border-ice-3" />}>
+          <HeaderWithUser />
+        </Suspense>
+        <Suspense fallback={null}>
+          <CatalogOfflineBanner />
+        </Suspense>
+        <main id="main">{children}</main>
+        <ShopFooter />
+      </BasketProvider>
+    </ToastProvider>
+  );
+}
 
+async function HeaderWithUser() {
+  const user = await getUser();
+  return <ShopHeader user={user ? { name: user.name, role: user.role } : null} />;
+}
+
+async function CatalogOfflineBanner() {
+  const { offline } = await getShopCatalog();
+  return offline ? <OfflineBanner /> : null;
+}
+
+async function PriceCrawl() {
+  const catalog = await getShopCatalog();
   const crawl = catalog.products
     .filter(p => p.variants.some(v => v.stock > 0))
     .map(p => {
@@ -28,26 +62,7 @@ export default async function ShopLayout({ children }: { children: ReactNode }) 
     // Fresh price changes lead the crawl.
     .sort((a, b) => Number(b.changed) - Number(a.changed));
 
-  return (
-    <ToastProvider>
-      <BasketProvider>
-        <TarpCrawl entries={crawl} />
-        <Suspense fallback={<div className="h-16 border-b border-ice-3" />}>
-          <ShopHeader user={user ? { name: user.name, role: user.role } : null} />
-        </Suspense>
-        {catalog.offline && (
-          <div className="border-b border-tarp-deep/40 bg-tarp-soft">
-            <p className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2.5 text-sm text-[#5c4300] sm:px-6">
-              <CloudOff className="size-4 shrink-0" aria-hidden />
-              Our stock system is offline for a moment. You can browse today&apos;s catch, but ordering is paused.
-            </p>
-          </div>
-        )}
-        <main id="main">{children}</main>
-        <ShopFooter />
-      </BasketProvider>
-    </ToastProvider>
-  );
+  return <TarpCrawl entries={crawl} />;
 }
 
 function ShopFooter() {

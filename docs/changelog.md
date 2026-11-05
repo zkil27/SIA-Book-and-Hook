@@ -5,6 +5,85 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-11-05 — Developer tools section (`/admin/dev`)
+
+**What:**
+- Access: `lib/dev/access.ts` (`DEV_EMAILS` allowlist on top of ADMIN; `requireDev()` → 404 otherwise; off when unset). Checked in `app/(admin)/admin/dev/layout.tsx` and at the start of every action in `lib/actions/dev.ts`.
+- Pages under `app/(admin)/admin/dev/`: Overview (env, commit, function vs database region check, pool params, `SELECT 1` × 5, row counts, open test orders), Checks and timing (integrity checks + timing probes), Test scenarios (test orders, morning rush, clean-up), UI gallery (real components with fixture data in every state). Components in `components/dev/`.
+- `lib/dev/checks.ts`: integrity checks shared with `scripts/check-ledger.ts` / `check-data.ts` (now thin wrappers; `scripts/_report.ts` gained `printReport`). Adds SQL-vs-JS stock and FIFO-age parity and a "balance dipped below zero" warning.
+- `lib/dev/scenarios.ts`, `lib/dev/health.ts`; `lib/catalog-fixture.ts` (client-safe static catalog, also used by the offline fallback).
+- `scripts/create-dev-admin.ts` + `npm run dev:admin`: creates an ADMIN with your own email/password from env vars.
+- `AdminShell`: Dev tools link (rail footer, phone More sheet), Developer palette entries and the `g d` shortcut, only for allowlisted users.
+
+**Why:** User asked for a dev-only area to test things on the deployed build.
+
+**Impact:** Set `DEV_EMAILS` locally and in Vercel (redeploy), run `npm run dev:admin`. Test data is add-only and tagged "dev test"; clean up before demos. Docs: `docs/dev-tools.md` (new), `docs/scope.md` §6, `docs/deployment.md`, `.env.example`.
+
+## 2026-11-05 — Storefront: streaming layout, lighter reads, optimised images, basket store
+
+**What:**
+- `app/(shop)/layout.tsx` awaits nothing: price crawl, signed-in header and offline banner stream behind Suspense. New `components/shop/OfflineBanner.tsx`, `app/(shop)/loading.tsx` + `components/shop/ShopSkeleton.tsx`.
+- `lib/catalog.ts`: stock sum restricted to sellable variants; `getShopProduct` is a single-product query; `loadCatalogFromDb()` exported (uncached) for probes.
+- `lib/orders.ts`: `/account` list no longer loads status events (`MyOrder` type).
+- `next/image` replaces every `<img>` (shop and admin) with per-placement `sizes`; `AuthShell` no longer makes phones download the 604 KB scene photo. `Permanent_Marker` and `Geist_Mono` no longer preload.
+- `components/shop/basket.tsx`: external store (`useSyncExternalStore`) with `useBasketQty` / `useBasketActions`; `ProductCard` and `ProductBuy` re-render only for their own variant. `BasketProvider persist={false}` for in-memory use.
+
+**Why:** Every shop page waited on the full catalog before sending HTML; images were full-size; one basket tap re-rendered ~30 cards.
+
+**Impact:** Same visuals and behaviour. Docs: `docs/performance.md`, `docs/deployment.md` (image allowance).
+
+## 2026-11-05 — Admin: SQL stock math, streaming shell, targeted invalidation, query fixes
+
+**What:**
+- `lib/stock-sql.ts` (new): `stockByVariant`, `oldestInflowByVariant` (FIFO age via a window query).
+- `lib/admin-data.ts` rewritten: `loadInventory` uses SQL aggregates (no ledger rows); `loadProduct`; `getDashboard` uses `aggregate`, SQL top sellers and a real pending count; `getAdminOrder`; `loadLedger` computes running balances in SQL and returns the newest 300 rows + `truncated`; `ledgerVariants`. Uncached variants exported for probes.
+- `app/(admin)/admin/layout.tsx`: awaits only the session; badges/palette stream as a promise (`AdminShell` now takes `data: Promise<ShellData>`). New `loading.tsx`, `error.tsx`, `components/admin/skeletons.tsx`.
+- Orders page runs queries in parallel and finds `?open=` by number; product editor reads one product; ledger page shows a "latest 300" note.
+- `lib/actions/util.ts`: `invalidate("admin" | "orders" | "shop")` replaces `refreshAll()` at all 15 call sites. Removed duplicate `router.refresh()` in `StockDesk` and `CancelOrderDialog`. `getUser()` wrapped in React `cache()`.
+- `lib/orders-core.ts` (new, server-only, not `"use server"`): `PlaceOrderSchema`, `createOrderTx`, `cancelOrderTx`, used by checkout, staff cancel and dev scenarios. Wording of ledger reasons unchanged.
+- `lib/prisma.ts`: opt-in `PRISMA_LOG=query`.
+
+**Why:** The admin was slow: every page loaded the whole ledger into Node, the layout blocked on it, nothing streamed, and every save re-rendered everything.
+
+**Impact:** Dashboard "Waiting to confirm" now shows the true count (was capped at 8). Ledger page lists at most 300 rows per filter. Docs: `docs/performance.md` (new), `docs/data-model.md` (stock read path), `docs/project-overview.md`, `AGENTS.md`.
+
+## 2026-11-05 — Query indexes, function region, DB timeouts
+
+**What:**
+- `prisma/schema.prisma`: `@@index` on `Product(categoryId)`, `ProductVariant(productId)`, `StockMovement(orderId)`, `Order(status, createdAt)`, `Order(customerId, createdAt)`, `OrderItem(orderId)`, `OrderItem(variantId)`. Migration `prisma/migrations/20261105000000_add_query_indexes/migration.sql` (CREATE INDEX only; matches `prisma migrate diff` output exactly).
+- `vercel.json` (new): `"regions": ["sin1"]`.
+- `.env.example`: `connect_timeout=5&pool_timeout=10` on `DATABASE_URL`, `DEV_EMAILS`, `PRISMA_LOG`. It was git-ignored by the `.env*` rule and never committed; `.gitignore` now un-ignores it (`!.env.example`). It holds placeholders only.
+
+**Why:** Foreign keys weren't indexed; functions most likely ran in iad1 while Supabase is in Singapore; a paused database made pages wait on Prisma's default timeouts.
+
+**Impact:** Run `npx prisma migrate deploy`. Add the timeout params to `DATABASE_URL` in Vercel and redeploy. ERD unchanged (relations unchanged; it doesn't list indexes). Docs: `docs/data-model.md` (indexes), `docs/deployment.md`.
+
+## 2026-11-05 — Require sign-in to cancel an order
+
+**What:** `cancelCustomerOrder` (`lib/actions/checkout.ts`) now refuses signed-out callers; only the order's customer or staff can cancel. `/track` shows "Sign in to cancel" (returning to the order after login) to signed-out visitors.
+
+**Why:** The ownership check skipped when nobody was signed in, so anyone could cancel any order by walking the sequential HB-#### codes.
+
+**Impact:** Security fix. Docs: `docs/project-overview.md`, `docs/scope.md` §6.
+
+## 2026-11-05 — Lint: ignore tool folders, zero-warning gate
+
+**What:** `eslint.config.mjs` ignores `.agents/`, `.kiro/`, `.claude/`, `.cursor/`. Fixed the two app warnings in `components/admin/LedgerView.tsx` (ternary used as a statement; unused map index). `lint` script is now `eslint --max-warnings=0`. `eslint-report.json` deleted and git-ignored.
+
+**Why:** 282 of 284 warnings came from third-party skill scripts; warnings never failed the gate, so they piled up.
+
+**Impact:** Any new lint warning now fails `npm run verify` and the pre-commit hook. Docs: `AGENTS.md` (Verification gate).
+
+## 2026-11-05 — Install Impeccable design skill for Kiro
+
+**What:**
+- Added `.kiro/skills/impeccable/` (SKILL.md, `reference/`, `scripts/`, `agents/`), copied from the existing `.agents/skills/impeccable/` install (skill version 4.3.1, CLI scripts 0.1.5).
+- `npx impeccable install -y --providers=kiro --scope=project --no-hooks` was tried twice and failed with HTTP 504 from the skill bundle download, so the local copy was used instead.
+
+**Why:** User asked to install Impeccable in Kiro. Kiro reads workspace skills from `.kiro/skills/`, not `.agents/skills/`.
+
+**Impact:** Kiro can now load the `impeccable` skill for UI design, critique, and polish work. When the download server recovers, `npx impeccable install -y --providers=kiro --scope=project --force` will bring it to the latest version. No application code changed.
+
 ## 2026-10-10 — Migrate web images from Git LFS to native Git blobs for Vercel deployment
 
 **What:**

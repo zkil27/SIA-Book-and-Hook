@@ -115,6 +115,42 @@ Read `1 ──< many` as "one of these has many of those."
 
 ---
 
+## How stock is read
+
+Stock is still never stored. It is computed from the ledger, but in the
+database rather than in the app (`lib/stock-sql.ts`, since 2026-11-05):
+
+- **Current stock** = `SUM(quantity)` of a variant's movements (a `GROUP BY`).
+- **Age of the oldest stock on hand** (drives the 7-day "To sale" flag) uses
+  first-in, first-out lots: sales use up the oldest deliveries first, so what's
+  left is the newest deliveries adding up to the current stock. A window query
+  finds the oldest delivery still partly on hand.
+- **Ledger running balance** = `SUM(quantity) OVER (PARTITION BY variant ORDER
+  BY time)`, computed over full history before the page's date filter.
+
+`lib/ledger.ts` keeps the plain JavaScript versions as the reference, and
+`npm run check:ledger` compares both for every variant.
+
+## Indexes
+
+Postgres does not index foreign keys automatically, and Prisma doesn't add
+them either. Beyond the unique keys, the schema indexes:
+
+| Table | Index | Serves |
+|---|---|---|
+| StockMovement | `(variantId, createdAt)` | A variant's history, stock sums, ledger filter |
+| StockMovement | `(orderId)` | An order's movements (cancelling returns exactly what it holds) |
+| Order | `(status, createdAt)` | Admin order tabs, pending counts, dashboard date ranges |
+| Order | `(customerId, createdAt)` | A customer's order history |
+| OrderItem | `(orderId)`, `(variantId)` | Loading an order's lines; top sellers |
+| OrderStatusEvent | `(orderId, createdAt)` | An order's timeline |
+| Product | `(categoryId)` | Catalog by category |
+| ProductVariant | `(productId)` | A product's variants |
+
+Indexes don't change the entities or relations, so the ERD is unchanged.
+
+---
+
 ## Design decisions worth defending
 
 These are the questions a panel is most likely to ask. Have the answer ready.

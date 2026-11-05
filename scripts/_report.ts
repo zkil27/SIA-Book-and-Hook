@@ -10,10 +10,12 @@
  * Run with tsx, e.g. `npm run check:ledger`.
  *
  * Note: like prisma/seed.ts, these are standalone CLI scripts and instantiate
- * their own PrismaClient rather than importing the app singleton from
- * @/lib/prisma (which is marked `server-only`). The process is short-lived and
- * disconnects at the end, so it does not affect app-runtime connection counts.
+ * their own short-lived PrismaClient, which disconnects at the end, so it does
+ * not affect app-runtime connection counts. The ledger and data checks share
+ * their logic with the /admin/dev Checks page via lib/dev/checks.ts.
  */
+
+import type { CheckReport } from "../lib/dev/checks";
 
 const peso = (centavos: number) =>
   `\u20b1${(centavos / 100).toLocaleString("en-PH", {
@@ -75,4 +77,19 @@ class Report {
   }
 }
 
-export { Report, peso };
+/** Print a shared CheckReport (lib/dev/checks.ts) and exit 1 on any failure. */
+function printReport(report: CheckReport): never {
+  const r = new Report(report.title);
+  for (const c of report.results) {
+    const text = c.detail ? `${c.name} (${c.detail})` : c.name;
+    if (c.status === "pass") r.pass(text);
+    else if (c.status === "warn") r.warn(text);
+    else r.fail(text);
+  }
+  console.log("");
+  for (const line of report.info) r.info(line);
+  r.info(`Checked in ${report.ms}ms`);
+  return r.finish();
+}
+
+export { Report, peso, printReport };

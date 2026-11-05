@@ -3,7 +3,7 @@
 import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/session";
-import { dbError, fail, ok, refreshAll, serializable, UserError, type ActionResult } from "./util";
+import { dbError, fail, ok, invalidate, serializable, UserError, type ActionResult } from "./util";
 
 // ── Products ─────────────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ export async function saveProduct(input: ProductInputT): Promise<ActionResult<{ 
       }
       return product.id;
     });
-    refreshAll();
+    invalidate("admin", "shop");
     return ok({ id });
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);
@@ -97,7 +97,7 @@ export async function setProductActive(productId: string, active: boolean): Prom
   await requireAdmin();
   try {
     await prisma.product.update({ where: { id: productId }, data: { active } });
-    refreshAll();
+    invalidate("admin", "shop");
     return ok(null);
   } catch (err) {
     return dbError(err);
@@ -135,7 +135,7 @@ export async function savePrices(
       }
       return out;
     });
-    refreshAll();
+    invalidate("admin", "shop");
     return ok({ changed });
   } catch (err) {
     return dbError(err);
@@ -164,7 +164,7 @@ export async function createCategory(name: string): Promise<ActionResult<{ id: s
     const exists = await prisma.category.findUnique({ where: { slug } });
     if (exists) return fail(`"${exists.name}" already exists.`);
     const c = await prisma.category.create({ data: { name: clean, slug } });
-    refreshAll();
+    invalidate("admin", "shop");
     return ok({ id: c.id });
   } catch (err) {
     return dbError(err);
@@ -178,7 +178,7 @@ export async function renameCategory(id: string, name: string): Promise<ActionRe
   if (clean.length < 2) return fail("Enter a category name.");
   try {
     await prisma.category.update({ where: { id }, data: { name: clean } });
-    refreshAll();
+    invalidate("admin", "shop");
     return ok(null);
   } catch (err) {
     return dbError(err);

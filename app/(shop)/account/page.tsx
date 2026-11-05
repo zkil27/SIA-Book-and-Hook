@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight, LogOut } from "lucide-react";
 import { listMyOrders } from "@/lib/orders";
@@ -54,11 +55,8 @@ export default async function AccountPage() {
                 >
                   <div className="flex -space-x-3">
                     {o.items.slice(0, 3).map((i, idx) => (
-                      <span key={idx} className="size-12 overflow-hidden rounded-full bg-ice-2 ring-2 ring-paper">
-                        {i.image && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={i.image} alt="" className="size-full object-cover" />
-                        )}
+                      <span key={idx} className="relative size-12 overflow-hidden rounded-full bg-ice-2 ring-2 ring-paper">
+                        {i.image && <Image src={i.image} alt="" fill sizes="48px" className="object-cover" />}
                       </span>
                     ))}
                   </div>

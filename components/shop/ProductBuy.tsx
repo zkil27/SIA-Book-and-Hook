@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ViewTransition, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
@@ -10,7 +11,7 @@ import { LOW_STOCK_AT, splitName, unitFor } from "@/lib/meta";
 import { pesoNumber } from "@/lib/money";
 import { CategoryChip, buttonClass } from "@/components/ui/primitives";
 import { Odometer, Stamp } from "@/components/ui/motion";
-import { useBasket } from "./basket";
+import { useBasketActions, useBasketQty } from "./basket";
 import { QtyStepper } from "./BasketUI";
 
 /** Grams in a variant name, for the hanging scale ("Whole 1kg" → 1000). */
@@ -86,7 +87,7 @@ function HangingScale({ grams }: { grams: number | null }) {
 }
 
 export function ProductBuy({ product, offline }: { product: ShopProduct; offline: boolean }) {
-  const basket = useBasket();
+  const basket = useBasketActions();
   const firstInStock = product.variants.find(v => v.stock > 0) ?? product.variants[0];
   const [variantId, setVariantId] = useState(firstInStock.id);
   const [qty, setQty] = useState(1);
@@ -95,7 +96,8 @@ export function ProductBuy({ product, offline }: { product: ShopProduct; offline
 
   const v = product.variants.find(x => x.id === variantId) ?? firstInStock;
   const { local, english } = splitName(product.name);
-  const left = v.stock - basket.qtyOf(v.id);
+  const inBasket = useBasketQty(v.id);
+  const left = v.stock - inBasket;
   const canAdd = !offline && left > 0;
   const dishes = DISHES.filter(d => product.dishes.includes(d.id));
 
@@ -124,8 +126,18 @@ export function ProductBuy({ product, offline }: { product: ShopProduct; offline
         <div className="sticky top-24 overflow-hidden rounded-[var(--radius-card)] bg-ice-2">
           <ViewTransition name={`photo-${product.id}`} share="morph" default="none">
             {product.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img ref={photoRef} src={product.image} alt={product.name} className="aspect-[4/3] w-full object-cover md:aspect-[4/5]" />
+              <div className="relative aspect-[4/3] w-full md:aspect-[4/5]">
+                <Image
+                  ref={photoRef}
+                  src={product.image}
+                  alt={product.name}
+                  fill
+                  loading="eager"
+                  fetchPriority="high"
+                  sizes="(min-width: 1280px) 620px, (min-width: 768px) 52vw, 100vw"
+                  className="object-cover"
+                />
+              </div>
             ) : (
               <div className="aspect-[4/3] md:aspect-[4/5]" />
             )}
@@ -217,7 +229,7 @@ export function ProductBuy({ product, offline }: { product: ShopProduct; offline
           </div>
           <p className="mt-3 text-[13px] text-ink-3">
             Stock shown is counted live from our stock ledger.
-            {basket.qtyOf(v.id) > 0 && ` ${basket.qtyOf(v.id)} already in your basket.`}
+            {inBasket > 0 && ` ${inBasket} already in your basket.`}
           </p>
         </div>
 

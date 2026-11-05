@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -141,11 +142,8 @@ export function CheckoutFlow({ defaultName, offline }: { defaultName: string; of
                   <ul className="flex flex-col divide-y divide-ice-3">
                     {basket.items.map(item => (
                       <li key={item.variantId} className="flex items-center gap-4 py-4 first:pt-0">
-                        <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-ice-2">
-                          {item.image && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={item.image} alt="" className="size-full object-cover" />
-                          )}
+                        <div className="relative size-16 shrink-0 overflow-hidden rounded-lg bg-ice-2">
+                          {item.image && <Image src={item.image} alt="" fill sizes="64px" className="object-cover" />}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-semibold text-ink">{item.name}</p>

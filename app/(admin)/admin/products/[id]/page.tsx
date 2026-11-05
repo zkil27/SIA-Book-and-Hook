@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import prisma from "@/lib/prisma";
-import { loadInventory } from "@/lib/admin-data";
+import { loadProduct } from "@/lib/admin-data";
 import { PRODUCT_IMAGES } from "@/lib/catalog-data";
 import { PageHeader } from "@/components/admin/kit";
 import { ProductEditor } from "@/components/admin/ProductEditor";
@@ -9,11 +9,10 @@ export const metadata = { title: "Edit product" };
 
 export default async function EditProductPage(props: PageProps<"/admin/products/[id]">) {
   const { id } = await props.params;
-  const [inv, categories] = await Promise.all([
-    loadInventory(),
+  const [p, categories] = await Promise.all([
+    loadProduct(id),
     prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, slug: true } }),
   ]);
-  const p = inv.find(x => x.id === id);
   if (!p) notFound();
 
   return (

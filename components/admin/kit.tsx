@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ReactNode } from "react";
 import { CloudOff, Hourglass } from "lucide-react";
 import { stockState, TO_SALE_AFTER_DAYS } from "@/lib/meta";
@@ -80,13 +81,11 @@ export function AgeBadge({ days }: { days: number | null }) {
   );
 }
 
+/** Small product photo. Optimised to thumbnail width instead of the full-size original. */
 export function Thumb({ src, size = "size-10" }: { src: string | null; size?: string }) {
   return (
-    <span className={`${size} block shrink-0 overflow-hidden rounded-lg bg-ice-2`}>
-      {src && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="size-full object-cover" />
-      )}
+    <span className={`${size} relative block shrink-0 overflow-hidden rounded-lg bg-ice-2`}>
+      {src && <Image src={src} alt="" fill sizes="128px" className="object-cover" />}
     </span>
   );
 }

@@ -3,12 +3,11 @@
 import { animate } from "motion";
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -46,14 +45,7 @@ type BasketCtx = {
   bump: number;
 };
 
-const Ctx = createContext<BasketCtx | null>(null);
 const KEY = "hb-basket-v1";
-
-export function useBasket(): BasketCtx {
-  const ctx = useContext(Ctx);
-  if (!ctx) throw new Error("useBasket must be used inside <BasketProvider>");
-  return ctx;
-}
 
 function prefersReducedMotion() {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -101,86 +93,140 @@ function tossIntoBasket(from: HTMLElement, target: HTMLElement): Promise<void> {
   ).then(() => ghost.remove());
 }
 
-export function BasketProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<BasketItem[]>([]);
-  const [ready, setReady] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [bump, setBump] = useState(0);
-  const targetRef = useRef<HTMLButtonElement | null>(null);
+// ── Store ────────────────────────────────────────────────────────────────────
+// An external store instead of a context value, so a component can subscribe
+// to just the slice it shows. A product card listens to its own variant's
+// quantity only; adding one item no longer re-renders every card on the page.
 
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as BasketItem[];
-        // Reading localStorage is an external system and must wait for mount
-        // (the server has no storage), so this one setState-in-effect is intended.
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        if (Array.isArray(parsed)) setItems(parsed.filter(i => i && i.variantId && i.qty > 0));
+type State = { items: BasketItem[]; ready: boolean; open: boolean; bump: number };
+const EMPTY: State = { items: [], ready: false, open: false, bump: 0 };
+const serverState = () => EMPTY;
+
+type Actions = Pick<BasketCtx, "setOpen" | "add" | "setQty" | "remove" | "clear">;
+
+function createBasketStore(persist: boolean) {
+  let state = EMPTY;
+  const listeners = new Set<() => void>();
+  const targetRef: RefObject<HTMLButtonElement | null> = { current: null };
+
+  function set(patch: (s: State) => Partial<State>) {
+    const next = { ...state, ...patch(state) };
+    if (persist && next.ready && next.items !== state.items) {
+      try {
+        window.localStorage.setItem(KEY, JSON.stringify(next.items));
+      } catch {
+        /* storage full or blocked: the basket still works for this visit */
       }
-    } catch {
-      /* storage unavailable: basket still works for this visit */
     }
-    setReady(true);
-  }, []);
+    state = next;
+    listeners.forEach(l => l());
+  }
 
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      window.localStorage.setItem(KEY, JSON.stringify(items));
-    } catch {
-      /* ignore */
-    }
-  }, [items, ready]);
+  const actions: Actions = {
+    setOpen: open => set(() => ({ open })),
+    add(item, qty = 1, from) {
+      set(s => {
+        const existing = s.items.find(i => i.variantId === item.variantId);
+        return {
+          items: existing
+            ? s.items.map(i => (i.variantId === item.variantId ? { ...i, ...item, qty: Math.min(i.qty + qty, item.stock) } : i))
+            : [...s.items, { ...item, qty: Math.min(qty, item.stock) }],
+        };
+      });
+      const target = targetRef.current;
+      const bumpIt = () => set(s => ({ bump: s.bump + 1 }));
+      if (from && target && !prefersReducedMotion()) void tossIntoBasket(from, target).then(bumpIt);
+      else bumpIt();
+    },
+    setQty: (variantId, qty) =>
+      set(s => ({
+        items:
+          qty <= 0
+            ? s.items.filter(i => i.variantId !== variantId)
+            : s.items.map(i => (i.variantId === variantId ? { ...i, qty: Math.min(qty, i.stock) } : i)),
+      })),
+    remove: variantId => set(s => ({ items: s.items.filter(i => i.variantId !== variantId) })),
+    clear: () => set(() => ({ items: [] })),
+  };
 
-  const add = useCallback<BasketCtx["add"]>((item, qty = 1, from) => {
-    setItems(list => {
-      const existing = list.find(i => i.variantId === item.variantId);
-      if (existing) {
-        return list.map(i =>
-          i.variantId === item.variantId ? { ...i, ...item, qty: Math.min(i.qty + qty, item.stock) } : i
-        );
+  return {
+    getState: () => state,
+    subscribe(l: () => void) {
+      listeners.add(l);
+      return () => {
+        listeners.delete(l);
+      };
+    },
+    targetRef,
+    actions,
+    /** Load the saved basket. Runs after mount: the server has no storage. */
+    restore() {
+      let items: BasketItem[] = [];
+      if (persist) {
+        try {
+          const raw = window.localStorage.getItem(KEY);
+          const parsed = raw ? (JSON.parse(raw) as BasketItem[]) : [];
+          if (Array.isArray(parsed)) items = parsed.filter(i => i && i.variantId && i.qty > 0);
+        } catch {
+          /* storage unavailable: basket still works for this visit */
+        }
       }
-      return [...list, { ...item, qty: Math.min(qty, item.stock) }];
-    });
-    const target = targetRef.current;
-    if (from && target && !prefersReducedMotion()) {
-      void tossIntoBasket(from, target).then(() => setBump(b => b + 1));
-    } else {
-      setBump(b => b + 1);
-    }
-  }, []);
+      set(() => ({ items, ready: true }));
+    },
+  };
+}
 
-  const setQty = useCallback((variantId: string, qty: number) => {
-    setItems(list =>
-      qty <= 0
-        ? list.filter(i => i.variantId !== variantId)
-        : list.map(i => (i.variantId === variantId ? { ...i, qty: Math.min(qty, i.stock) } : i))
-    );
-  }, []);
+type BasketStore = ReturnType<typeof createBasketStore>;
 
-  const remove = useCallback((variantId: string) => setItems(list => list.filter(i => i.variantId !== variantId)), []);
-  const clear = useCallback(() => setItems([]), []);
+const Ctx = createContext<BasketStore | null>(null);
 
-  const value = useMemo<BasketCtx>(() => {
-    const count = items.reduce((s, i) => s + i.qty, 0);
-    const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+function useStore(): BasketStore {
+  const store = useContext(Ctx);
+  if (!store) throw new Error("useBasket must be used inside <BasketProvider>");
+  return store;
+}
+
+/**
+ * `persist={false}` keeps the basket in memory only (the dev UI gallery uses
+ * this so previews never touch a shopper's saved basket).
+ */
+export function BasketProvider({ children, persist = true }: { children: ReactNode; persist?: boolean }) {
+  const [store] = useState(() => createBasketStore(persist));
+  useEffect(() => {
+    store.restore();
+  }, [store]);
+  return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
+}
+
+/** The whole basket: for the basket button, sheet and checkout. */
+export function useBasket(): BasketCtx {
+  const store = useStore();
+  const s = useSyncExternalStore(store.subscribe, store.getState, serverState);
+  return useMemo(() => {
+    const count = s.items.reduce((n, i) => n + i.qty, 0);
+    const subtotal = s.items.reduce((n, i) => n + i.price * i.qty, 0);
     return {
-      items,
+      ...s,
+      ...store.actions,
       count,
       subtotal,
-      ready,
-      open,
-      setOpen,
-      add,
-      setQty,
-      remove,
-      clear,
-      qtyOf: (id: string) => items.find(i => i.variantId === id)?.qty ?? 0,
-      targetRef,
-      bump,
+      qtyOf: (id: string) => s.items.find(i => i.variantId === id)?.qty ?? 0,
+      targetRef: store.targetRef,
     };
-  }, [items, ready, open, add, setQty, remove, clear, bump]);
+  }, [s, store]);
+}
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+/** How many of one variant are in the basket. Re-renders only when that number changes. */
+export function useBasketQty(variantId: string): number {
+  const store = useStore();
+  return useSyncExternalStore(
+    store.subscribe,
+    () => store.getState().items.find(i => i.variantId === variantId)?.qty ?? 0,
+    () => 0
+  );
+}
+
+/** Basket actions without subscribing to its contents. */
+export function useBasketActions(): Actions {
+  return useStore().actions;
 }

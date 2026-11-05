@@ -1,7 +1,7 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowRight, Check, ClipboardCheck, HandCoins, Minus, Plus, Scale, Search, SlidersHorizontal } from "lucide-react";
@@ -402,11 +402,12 @@ function WalkInMode({ variants, initialId }: { variants: DeskVariant[]; initialI
                   className={`relative aspect-[4/3] bg-ice-2 overflow-hidden ${allOut ? "cursor-not-allowed" : "cursor-pointer"}`}
                 >
                   {p.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={p.image}
                       alt=""
-                      className={`size-full object-cover transition-transform duration-500 ease-[var(--ease-out-expo)] group-hover:scale-105 ${
+                      fill
+                      sizes="(min-width: 1024px) 240px, (min-width: 640px) 33vw, 50vw"
+                      className={`object-cover transition-transform duration-500 ease-[var(--ease-out-expo)] group-hover:scale-105 ${
                         allOut ? "grayscale-[0.6] brightness-95" : ""
                       }`}
                     />
@@ -563,7 +564,6 @@ function WalkInMode({ variants, initialId }: { variants: DeskVariant[]; initialI
 
 function CountMode({ variants }: { variants: DeskVariant[] }) {
   const toast = useToast();
-  const router = useRouter();
   const [counts, setCounts] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
@@ -587,8 +587,8 @@ function CountMode({ variants }: { variants: DeskVariant[] }) {
         title: `Count saved: ${res.data.checked} checked`,
         description: res.data.adjusted ? `${res.data.adjusted} corrected in the ledger.` : "Everything matched the system.",
       });
+      // The action revalidates /admin, which re-renders this page with the new stock.
       setCounts({});
-      router.refresh();
     });
   }
 

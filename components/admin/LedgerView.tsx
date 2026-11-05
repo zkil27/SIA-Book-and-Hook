@@ -42,11 +42,14 @@ const PERIODS = [
 
 export function LedgerView({
   rows,
+  truncated = false,
   variants,
   variantId,
   period,
 }: {
   rows: LedgerRow[];
+  /** More entries match than were loaded (newest LEDGER_LIMIT shown). */
+  truncated?: boolean;
   variants: { id: string; label: string; stock: number }[];
   variantId: string | null;
   period: string;
@@ -66,7 +69,10 @@ export function LedgerView({
   const totals = useMemo(() => {
     let inn = 0;
     let out = 0;
-    for (const r of shown) (r.quantity > 0 ? (inn += r.quantity) : (out += r.quantity));
+    for (const r of shown) {
+      if (r.quantity > 0) inn += r.quantity;
+      else out += r.quantity;
+    }
     return { inn, out };
   }, [shown]);
   const selected = variants.find(v => v.id === variantId);
@@ -145,6 +151,12 @@ export function LedgerView({
         </div>
       </div>
 
+      {truncated && (
+        <p className="mt-4 text-[13px] text-ink-3">
+          Showing the latest {rows.length} movements. Pick an item or a shorter period to see older entries.
+        </p>
+      )}
+
       {isolated && (
         <div className="mt-4 flex items-center gap-3 rounded-lg bg-mint-soft px-4 py-2.5 text-sm text-teal-ink">
           Highlighting <strong>{rows.find(r => r.variantId === isolated)?.product}</strong>
@@ -178,7 +190,7 @@ export function LedgerView({
                 </td>
               </tr>
             )}
-            {shown.map((r, i) => {
+            {shown.map(r => {
               const dim = isolated && r.variantId !== isolated;
               const fresh = now - new Date(r.at).getTime() < 90_000;
               return (

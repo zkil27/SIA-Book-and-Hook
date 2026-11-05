@@ -17,6 +17,11 @@ const eslintConfig = defineConfig([
     // Figma-exported asset modules (generated, not hand-authored).
     "imports/**",
     "public/imports/**",
+    // Third-party AI skill / editor tooling (installed, not app code).
+    ".agents/**",
+    ".kiro/**",
+    ".claude/**",
+    ".cursor/**",
   ]),
 ]);
 

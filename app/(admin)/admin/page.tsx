@@ -15,7 +15,7 @@ export const metadata = { title: "Today" };
 export default async function TodayPage() {
   const d = await getDashboard();
   const alerts = d.outOfStock.length + d.lowStock.length;
-  const nothingToDo = d.pendingOrders.length === 0 && alerts === 0 && d.toSale.length === 0;
+  const nothingToDo = d.pendingCount === 0 && alerts === 0 && d.toSale.length === 0;
 
   return (
     <>
@@ -47,7 +47,7 @@ export default async function TodayPage() {
         {[
           { k: "Orders today", v: String(d.todayCount), href: "/admin/orders" },
           { k: "Sales today", v: peso(d.todayRevenue), href: "/admin/orders" },
-          { k: "Waiting to confirm", v: String(d.pendingOrders.length), href: "/admin/orders?status=PENDING", hot: d.pendingOrders.length > 0 },
+          { k: "Waiting to confirm", v: String(d.pendingCount), href: "/admin/orders?status=PENDING", hot: d.pendingCount > 0 },
           { k: "Stock alerts", v: String(alerts), href: "/admin/stock", hot: alerts > 0 },
         ].map((s, i) => (
           <Link
@@ -74,7 +74,7 @@ export default async function TodayPage() {
           ) : (
             <div className="divide-y divide-ice-3">
               {d.pendingOrders.length > 0 && (
-                <InboxGroup label={`${d.pendingOrders.length} order${d.pendingOrders.length === 1 ? "" : "s"} to confirm`} href="/admin/orders?status=PENDING">
+                <InboxGroup label={`${d.pendingCount} order${d.pendingCount === 1 ? "" : "s"} to confirm`} href="/admin/orders?status=PENDING">
                   {d.pendingOrders.map(o => (
                     <li key={o.id} className="flex items-center gap-3 px-5 py-3">
                       <Link href={`/admin/orders?open=${o.code}`} className="min-w-0 flex-1">

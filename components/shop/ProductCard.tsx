@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { ViewTransition, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -9,10 +10,10 @@ import { LOW_STOCK_AT, splitName, tiltFor, unitFor } from "@/lib/meta";
 import { PriceTag } from "@/components/ui/PriceTag";
 import { Stamp } from "@/components/ui/motion";
 import { buttonClass } from "@/components/ui/primitives";
-import { useBasket } from "./basket";
+import { useBasketActions, useBasketQty } from "./basket";
 
 export function ProductCard({ product, offline }: { product: ShopProduct; offline: boolean }) {
-  const basket = useBasket();
+  const basket = useBasketActions();
   const firstInStock = product.variants.find(v => v.stock > 0) ?? product.variants[0];
   const [variantId, setVariantId] = useState(firstInStock.id);
   const [added, setAdded] = useState(false);
@@ -20,7 +21,8 @@ export function ProductCard({ product, offline }: { product: ShopProduct; offlin
 
   const v = product.variants.find(x => x.id === variantId) ?? firstInStock;
   const { local, english } = splitName(product.name);
-  const inBasket = basket.qtyOf(v.id);
+  // Subscribes to this variant's quantity only, not the whole basket.
+  const inBasket = useBasketQty(v.id);
   const left = v.stock - inBasket;
   const soldOut = v.stock <= 0;
   const allOut = product.variants.every(x => x.stock <= 0);
@@ -53,13 +55,13 @@ export function ProductCard({ product, offline }: { product: ShopProduct; offlin
       >
         <ViewTransition name={`photo-${product.id}`} share="morph" default="none">
           {product.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               ref={imgRef}
               src={product.image}
               alt=""
-              loading="lazy"
-              className={`size-full object-cover transition-[transform,filter] duration-700 ease-[var(--ease-out-expo)] group-hover:scale-[1.05] ${
+              fill
+              sizes="(min-width: 1280px) 296px, (min-width: 768px) 33vw, (min-width: 440px) 50vw, 100vw"
+              className={`object-cover transition-[transform,filter] duration-700 ease-[var(--ease-out-expo)] group-hover:scale-[1.05] ${
                 allOut ? "grayscale-[0.7] brightness-95" : ""
               }`}
             />

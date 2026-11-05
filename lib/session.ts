@@ -1,15 +1,17 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 
 export type SessionUser = { id: string; name: string | null; email: string; role: "ADMIN" | "CUSTOMER" };
 
-export async function getUser(): Promise<SessionUser | null> {
+/** Per-request deduplicated: layout, page and actions decode the JWT once. */
+export const getUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth();
   const u = session?.user;
   if (!u?.id || !u.email) return null;
   return { id: u.id, name: u.name ?? null, email: u.email, role: u.role };
-}
+});
 
 /** For customer-only pages: redirects to /login?next=… when signed out. */
 export async function requireUser(next: string): Promise<SessionUser> {

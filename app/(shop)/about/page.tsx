@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Clock, MapPin, Phone, ScrollText } from "lucide-react";
 
 export const metadata: Metadata = { title: "About & contact" };
@@ -24,9 +25,14 @@ export default function AboutPage() {
         </p>
       </div>
 
-      <div className="mt-12 overflow-hidden rounded-[var(--radius-card)]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/scenes/market-stall.jpg" alt="Fresh fish and shrimp displayed at a market" className="aspect-[21/9] w-full object-cover" />
+      <div className="relative mt-12 aspect-[21/9] overflow-hidden rounded-[var(--radius-card)]">
+        <Image
+          src="/scenes/market-stall.jpg"
+          alt="Fresh fish and shrimp displayed at a market"
+          fill
+          sizes="(min-width: 1024px) 1024px, 100vw"
+          className="object-cover"
+        />
       </div>
 
       <section className="mt-16 grid gap-10 md:grid-cols-[1fr_1.2fr]">

@@ -4,7 +4,7 @@ import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/session";
 import { movementRef } from "@/lib/meta";
-import { dbError, fail, ok, refreshAll, serializable, UserError, type ActionResult } from "./util";
+import { dbError, fail, ok, invalidate, serializable, UserError, type ActionResult } from "./util";
 
 /**
  * Every stock change in the system goes through these actions, and every one
@@ -42,7 +42,7 @@ export async function adjustStock(
       });
       return { movementId: m.id, before, after: before + quantity };
     });
-    refreshAll();
+    invalidate("admin", "shop");
     return ok(res);
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);
@@ -69,7 +69,7 @@ export async function counterMovement(movementId: string, label = "Undo"): Promi
       });
       return { movementId: c.id };
     });
-    refreshAll();
+    invalidate("admin", "shop");
     return ok(res);
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);
@@ -93,7 +93,7 @@ export async function walkInSale(
       });
       return { movementId: m.id, after: before - qty };
     });
-    refreshAll();
+    invalidate("admin", "shop");
     return ok(res);
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);
@@ -132,7 +132,7 @@ export async function saveMorningCount(
       if (rows.length) await tx.stockMovement.createMany({ data: rows });
       return rows.length;
     });
-    refreshAll();
+    invalidate("admin", "shop");
     return ok({ adjusted, checked: valid.length });
   } catch (err) {
     return dbError(err);
