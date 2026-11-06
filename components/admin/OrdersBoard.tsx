@@ -24,7 +24,13 @@ const TABS: { key: OrderStatusKey | "ALL"; label: string }[] = [
   { key: "ALL", label: "All" },
 ];
 
-const CANCEL_REASONS = ["Customer cancelled", "Couldn't reach customer", "Out of stock", "Outside delivery area"];
+const CANCEL_REASONS = [
+  "Customer cancelled",
+  "Couldn't reach customer",
+  "Out of stock",
+  "Outside delivery area",
+  "Bad weather (no delivery)",
+];
 
 function useAdvance() {
   const toast = useToast();

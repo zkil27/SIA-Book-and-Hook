@@ -5,6 +5,14 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-11-06 — Add "Bad weather" as a quick cancel reason
+
+**What:** Added "Bad weather (no delivery)" to the quick-pick cancel reasons in the admin cancel sheet (`CANCEL_REASONS` in `components/admin/OrdersBoard.tsx`).
+
+**Why:** User request. Typhoons and heavy rain stop deliveries in Cavite, and staff should be able to log that in one tap.
+
+**Impact:** UI only. The chip fills the reason field like the others; the reason is stored as the cancellation note on the order timeline, and stock goes back through the usual compensating ledger entries. No schema change.
+
 ## 2026-11-06 — Stop selling Bangus Sisig
 
 **What:**
