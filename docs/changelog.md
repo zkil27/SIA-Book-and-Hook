@@ -5,6 +5,16 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-11-06 — Stop selling Bangus Sisig
+
+**What:**
+- Removed "Bangus Sisig" (SKU `PREP-SISIG-500`) from `lib/catalog-data.ts`, so the seed, the offline fallback and the admin photo picker no longer include it.
+- Archived the existing product in the shared Supabase database (`active = false`, soft delete). Its one ledger row ("Restock", 12 tubs) and the product row stay; it had no orders.
+
+**Why:** User decision: a cooked/ready-to-cook sisig doesn't fit a fresh-seafood stall.
+
+**Impact:** Gone from the storefront now. It still appears under Products → Archived in the admin and can be restored there. `public/products/sisig.jpg` and its photo credit stay because the archived row still points at the image. The Prepared category keeps Daing na Bangus, Tinapa and Fish Tocino.
+
 ## 2026-11-05 — Developer tools section (`/admin/dev`)
 
 **What:**

@@ -139,9 +139,6 @@ export const CATALOG: CategorySeed[] = [
       { name: "Tinapa (Smoked Fish)", description: "Traditional smoked fish.", image: "/products/tinapa.jpg", dishes: ["fried"], variants: [
         { name: "Pack (5 pcs)", sku: "PREP-TINAPA-5", price: 180, opening: 16 },
       ]},
-      { name: "Bangus Sisig", description: "Ready-to-cook milkfish sisig for the sizzling plate.", image: "/products/sisig.jpg", dishes: ["fried"], variants: [
-        { name: "Tub 500g", sku: "PREP-SISIG-500", price: 250, opening: 12 },
-      ]},
       { name: "Fish Tocino", description: "Sweet-cured fish tocino.", image: "/products/tocino.jpg", dishes: ["fried"], variants: [
         { name: "Pack 500g", sku: "PREP-TOCINO-500", price: 190, opening: 14 },
       ]},
