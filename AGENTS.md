@@ -172,7 +172,14 @@ task is wasted cost and is not allowed here.
 Adding a new project-wide "never do this" rule? Encode it as a rule in
 `scripts/check-footguns.ts` so it's enforced, not just documented.
 
-## Known issues / current gaps (updated 2026-11-05)
+## Known issues / current gaps (updated 2026-11-07)
+
+0. **Saved delivery details (2026-11-07):** `User.phone/address/barangay` prefill
+   checkout and are edited on `/account`. Read them with `getDeliveryProfile()`
+   in `lib/account.ts`, from the database, never the JWT. `Order.delivery*` stays
+   the per-order snapshot. Migration `20261107000000_add_user_delivery_details`
+   is applied to Supabase; any fresh database must run it before this code,
+   because `auth.ts` reads every `User` column at login.
 
 0. **2026-11-05 performance pass** (`docs/performance.md`): stock is summed in
    SQL (`lib/stock-sql.ts`), never by loading ledger rows into Node. Writes call

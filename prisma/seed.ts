@@ -59,12 +59,14 @@ async function clearData() {
   await prisma.category.deleteMany();
 }
 
-async function upsertUser(email: string, name: string, role: Role, password: string) {
+type SavedContact = { phone: string; address: string; barangay: string };
+
+async function upsertUser(email: string, name: string, role: Role, password: string, contact?: SavedContact) {
   const passwordHash = await bcrypt.hash(password, 10);
   return prisma.user.upsert({
     where: { email },
-    update: { role, passwordHash, name },
-    create: { email, name, role, passwordHash },
+    update: { role, passwordHash, name, ...contact },
+    create: { email, name, role, passwordHash, ...contact },
   });
 }
 
@@ -75,12 +77,32 @@ async function main() {
   // --- Users ------------------------------------------------------------------
   const admin = await upsertUser("admin@hookandbox.ph", "Kiel (Admin)", Role.ADMIN, "admin123");
   const clerk = await upsertUser("clerk@hookandbox.ph", "Chels (Clerk)", Role.ADMIN, "clerk123");
-  const maria = await upsertUser("maria@example.com", "Maria Santos", Role.CUSTOMER, "customer123");
+  const maria = await upsertUser("maria@example.com", "Maria Santos", Role.CUSTOMER, "customer123", {
+    phone: "0917 201 1001",
+    address: "Blk 5 Lot 12, Mabini St.",
+    barangay: "Salawag",
+  });
   const others = await Promise.all([
-    upsertUser("jose@example.com", "Jose Reyes", Role.CUSTOMER, "customer123"),
-    upsertUser("ana@example.com", "Ana Cruz", Role.CUSTOMER, "customer123"),
-    upsertUser("pedro@example.com", "Pedro Lim", Role.CUSTOMER, "customer123"),
-    upsertUser("liza@example.com", "Liza Mendoza", Role.CUSTOMER, "customer123"),
+    upsertUser("jose@example.com", "Jose Reyes", Role.CUSTOMER, "customer123", {
+      phone: "0917 202 1002",
+      address: "14 Rizal Ave.",
+      barangay: "Paliparan",
+    }),
+    upsertUser("ana@example.com", "Ana Cruz", Role.CUSTOMER, "customer123", {
+      phone: "0917 203 1003",
+      address: "Blk 9 Lot 3, Sampaguita St.",
+      barangay: "Sampaloc",
+    }),
+    upsertUser("pedro@example.com", "Pedro Lim", Role.CUSTOMER, "customer123", {
+      phone: "0917 204 1004",
+      address: "27 Bonifacio St.",
+      barangay: "Burol",
+    }),
+    upsertUser("liza@example.com", "Liza Mendoza", Role.CUSTOMER, "customer123", {
+      phone: "0917 205 1005",
+      address: "Blk 2 Lot 18, Acacia Rd.",
+      barangay: "Langkaan",
+    }),
   ]);
   const customers = [maria, ...others];
   const staff = [admin, clerk];

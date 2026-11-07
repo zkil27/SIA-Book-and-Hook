@@ -7,33 +7,26 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowLeft, ArrowRight, Banknote, Check, Smartphone, Upload } from "lucide-react";
 import { useBasket, type BasketItem } from "./basket";
 import { BasinIcon, FreeDeliveryMeter, QtyStepper } from "./BasketUI";
+import { DeliveryFields, validateContact } from "./DeliveryFields";
+import { ReceiptSlip } from "./ReceiptSlip";
 import { placeOrder } from "@/lib/actions/checkout";
-import { DELIVERY_SLOTS } from "@/lib/meta";
+import { DELIVERY_SLOTS, type DeliveryContact } from "@/lib/meta";
 import { deliveryFeeFor, peso } from "@/lib/money";
 import { Button, ButtonLink, Field, Input, buttonClass } from "@/components/ui/primitives";
-import { Stamp } from "@/components/ui/motion";
 import { useToast } from "@/components/ui/toast";
 
 const STEPS = ["Review", "Delivery", "Payment", "Receipt"] as const;
-const BARANGAYS = [
-  "Burol", "Datu Esmael", "Emmanuel Bergado", "Fatima", "Langkaan", "Luzviminda", "Paliparan",
-  "Sabang", "Salawag", "Salitran", "Sampaloc", "San Agustin", "San Jose", "San Miguel",
-  "Santa Cruz", "Santa Fe", "Victoria Reyes", "Zone I", "Zone II", "Zone III", "Zone IV",
-];
 
-type Delivery = { name: string; phone: string; address: string; barangay: string; slot: (typeof DELIVERY_SLOTS)[number] };
+type Delivery = DeliveryContact & { name: string; slot: (typeof DELIVERY_SLOTS)[number] };
 type Receipt = { code: string; total: number; items: BasketItem[]; payment: "GCASH" | "COD"; slot: string; fee: number };
 
 function validate(d: Delivery): Partial<Record<keyof Delivery, string>> {
-  const e: Partial<Record<keyof Delivery, string>> = {};
+  const e: Partial<Record<keyof Delivery, string>> = validateContact(d);
   if (d.name.trim().length < 2) e.name = "Enter the name of the person receiving the order.";
-  if (!/^(\+?63|0)9\d{2}[\s-]?\d{3}[\s-]?\d{4}$/.test(d.phone.trim())) e.phone = "Enter a mobile number like 0917 123 4567.";
-  if (d.address.trim().length < 5) e.address = "Enter a street address or house number.";
-  if (d.barangay.trim().length < 2) e.barangay = "Enter your barangay.";
   return e;
 }
 
-export function CheckoutFlow({ defaultName, offline }: { defaultName: string; offline: boolean }) {
+export function CheckoutFlow({ defaultName, saved, offline }: { defaultName: string; saved: DeliveryContact | null; offline: boolean }) {
   const basket = useBasket();
   const toast = useToast();
   const reduce = useReducedMotion();
@@ -41,17 +34,24 @@ export function CheckoutFlow({ defaultName, offline }: { defaultName: string; of
   const [dir, setDir] = useState(1);
   const [delivery, setDelivery] = useState<Delivery>({
     name: defaultName,
-    phone: "",
-    address: "",
-    barangay: "",
+    phone: saved?.phone ?? "",
+    address: saved?.address ?? "",
+    barangay: saved?.barangay ?? "",
     slot: DELIVERY_SLOTS[0],
   });
   const [errors, setErrors] = useState<Partial<Record<keyof Delivery, string>>>({});
+  // Ticked for a first save; off once details exist, so a one-off order can't replace them.
+  const [saveDetails, setSaveDetails] = useState(!saved);
   const [payment, setPayment] = useState<"GCASH" | "COD" | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [pending, start] = useTransition();
 
   const fee = deliveryFeeFor(basket.subtotal);
+  const differsFromSaved =
+    !saved ||
+    delivery.phone.trim() !== saved.phone ||
+    delivery.address.trim() !== saved.address ||
+    delivery.barangay.trim() !== saved.barangay;
   const go = (n: number) => {
     setDir(n > step ? 1 : -1);
     setStep(n);
@@ -82,7 +82,7 @@ export function CheckoutFlow({ defaultName, offline }: { defaultName: string; of
     }
     start(async () => {
       const items = basket.items.map(i => ({ variantId: i.variantId, qty: i.qty }));
-      const res = await placeOrder({ items, delivery, payment });
+      const res = await placeOrder({ items, delivery, payment, saveDetails: differsFromSaved && saveDetails });
       if (!res.ok) {
         toast({ title: "We couldn't place your order", description: res.error, tone: "error", duration: 7000 });
         return;
@@ -165,22 +165,12 @@ export function CheckoutFlow({ defaultName, offline }: { defaultName: string; of
 
               {step === 1 && (
                 <Panel title="Where should we deliver?">
+                  {saved && !differsFromSaved && <p className="-mt-3 mb-5 text-sm text-ink-3">Filled in from your account.</p>}
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Receiver's name" htmlFor="d-name" error={errors.name}>
                       <Input id="d-name" autoComplete="name" value={delivery.name} aria-invalid={!!errors.name} onChange={e => setDelivery({ ...delivery, name: e.target.value })} />
                     </Field>
-                    <Field label="Mobile number" htmlFor="d-phone" error={errors.phone} hint="The rider calls this number on arrival.">
-                      <Input id="d-phone" inputMode="tel" autoComplete="tel" placeholder="0917 123 4567" value={delivery.phone} aria-invalid={!!errors.phone} onChange={e => setDelivery({ ...delivery, phone: e.target.value })} />
-                    </Field>
-                    <Field label="House no. and street" htmlFor="d-address" error={errors.address} className="sm:col-span-2">
-                      <Input id="d-address" autoComplete="street-address" placeholder="Blk 5 Lot 12, Mabini St." value={delivery.address} aria-invalid={!!errors.address} onChange={e => setDelivery({ ...delivery, address: e.target.value })} />
-                    </Field>
-                    <Field label="Barangay" htmlFor="d-brgy" error={errors.barangay} hint="Dasmariñas City, Cavite">
-                      <Input id="d-brgy" list="brgys" placeholder="Salawag" value={delivery.barangay} aria-invalid={!!errors.barangay} onChange={e => setDelivery({ ...delivery, barangay: e.target.value })} />
-                      <datalist id="brgys">
-                        {BARANGAYS.map(b => <option key={b} value={b} />)}
-                      </datalist>
-                    </Field>
+                    <DeliveryFields idPrefix="d" value={delivery} errors={errors} onChange={patch => setDelivery({ ...delivery, ...patch })} />
                   </div>
                   <fieldset className="mt-6">
                     <legend className="text-[13px] font-semibold text-ink-2">Morning delivery slot</legend>
@@ -198,6 +188,19 @@ export function CheckoutFlow({ defaultName, offline }: { defaultName: string; of
                       ))}
                     </div>
                   </fieldset>
+                  {differsFromSaved && (
+                    <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl bg-ice p-3.5 ring-1 ring-inset ring-ice-3">
+                      <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-teal-deep" checked={saveDetails} onChange={e => setSaveDetails(e.target.checked)} />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-ink">
+                          {saved ? "Update my account with these details" : "Save these details to my account"}
+                        </span>
+                        <span className="block text-[13px] text-ink-3">
+                          {saved ? "Leave this off if this order is going somewhere else." : "Your next checkout fills in by itself."}
+                        </span>
+                      </span>
+                    </label>
+                  )}
                   <StepNav
                     back={() => go(0)}
                     next={() => {
@@ -309,7 +312,7 @@ export function CheckoutFlow({ defaultName, offline }: { defaultName: string; of
                 </Panel>
               )}
 
-              {step === 3 && receipt && <ReceiptSlip receipt={receipt} />}
+              {step === 3 && receipt && <OrderPlaced receipt={receipt} />}
             </motion.section>
           </AnimatePresence>
         </div>
@@ -371,72 +374,28 @@ function StepNav({ back, next, nextLabel }: { back?: () => void; next: () => voi
   );
 }
 
-/** The receipt prints out of a slot, then gets stamped. */
-function ReceiptSlip({ receipt }: { receipt: Receipt }) {
-  const reduce = useReducedMotion();
-  const subtotal = receipt.items.reduce((s, i) => s + i.price * i.qty, 0);
+/** The last step: the slip printing out, then where to go next. */
+function OrderPlaced({ receipt }: { receipt: Receipt }) {
   return (
     <div className="flex flex-col items-center">
-      <div className="h-3 w-full max-w-md rounded-full bg-ink shadow-[inset_0_-3px_0_#000]" aria-hidden />
-      <div className="w-full max-w-[400px] overflow-hidden">
-        <motion.div
-          initial={reduce ? false : { y: "-100%" }}
-          animate={{ y: 0 }}
-          transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
-          className="relative mx-auto bg-paper px-6 pb-10 pt-6"
-        >
-          <svg aria-hidden viewBox="0 0 120 6" preserveAspectRatio="none" className="absolute inset-x-0 bottom-0 h-2.5 w-full">
-            <path d={`M0 6 ${Array.from({ length: 20 }, (_, i) => `L${i * 6 + 3} 0 L${i * 6 + 6} 6`).join(" ")} Z`} fill="var(--color-ice)" />
-          </svg>
-          <p className="sign text-center text-[22px] text-ink">Hook &amp; Box</p>
-          <p className="text-center text-[12px] text-ink-3">Fresh seafood · Dasmariñas City</p>
-          <div className="my-4 border-t-2 border-dashed border-ice-3" />
-          <p className="text-center text-[13px] text-ink-3">Order code</p>
-          <p className="font-marker text-center text-[44px] leading-tight text-marker-deep">{receipt.code}</p>
-          <div className="my-4 border-t-2 border-dashed border-ice-3" />
-          <ul className="flex flex-col gap-1.5 font-mono text-[13px]">
-            {receipt.items.map(i => (
-              <li key={i.variantId} className="flex justify-between gap-3">
-                <span className="min-w-0 truncate">
-                  {i.qty} × {i.name} {i.variantName}
-                </span>
-                <span className="tabular">{peso(i.price * i.qty)}</span>
-              </li>
-            ))}
-            <li className="mt-2 flex justify-between border-t border-dashed border-ice-3 pt-2">
-              <span>Subtotal</span>
-              <span className="tabular">{peso(subtotal)}</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Delivery</span>
-              <span className="tabular">{receipt.fee === 0 ? "FREE" : peso(receipt.fee)}</span>
-            </li>
-            <li className="flex justify-between text-[15px] font-bold">
-              <span>TOTAL</span>
-              <span className="tabular">{peso(receipt.total)}</span>
-            </li>
-          </ul>
-          <div className="my-4 border-t-2 border-dashed border-ice-3" />
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[13px]">
-            <dt className="text-ink-3">Payment</dt>
-            <dd className="text-right font-semibold">{receipt.payment === "GCASH" ? "GCash" : "Cash on delivery"}</dd>
-            <dt className="text-ink-3">Delivery slot</dt>
-            <dd className="text-right font-semibold">{receipt.slot}</dd>
-            <dt className="text-ink-3">Status</dt>
-            <dd className="text-right font-semibold">Pending confirmation</dd>
-          </dl>
-          <div className="pointer-events-none mt-7 flex justify-center pb-2">
-            <Stamp tone="marker" rotate={-8} delay={reduce ? 0 : 1.15} className="text-[28px]">
-              Thank you!
-            </Stamp>
-          </div>
-        </motion.div>
-      </div>
+      <ReceiptSlip
+        code={receipt.code}
+        lines={receipt.items.map(i => ({ key: i.variantId, label: `${i.name} ${i.variantName}`, qty: i.qty, price: i.price }))}
+        fee={receipt.fee}
+        total={receipt.total}
+        payment={receipt.payment}
+        slot={receipt.slot}
+        status="PENDING"
+        animated
+      />
       <p className="mt-6 max-w-sm text-center text-sm text-ink-2">
         We&apos;ll confirm your order before packing. Keep your code to check its status anytime.
       </p>
       <div className="mt-5 flex flex-wrap justify-center gap-3">
         <ButtonLink href={`/track?code=${receipt.code}`}>Track this order</ButtonLink>
+        <ButtonLink href={`/receipt/${receipt.code}`} variant="outline">
+          Print or save receipt
+        </ButtonLink>
         <Link href="/#catch" className={buttonClass("outline")}>
           Keep shopping
         </Link>

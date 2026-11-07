@@ -5,13 +5,15 @@ import { parseOrderCode } from "@/lib/meta";
 import { cancelOrderTx, createOrderTx, PlaceOrderSchema, type PlaceOrderData } from "@/lib/orders-core";
 import { dbError, fail, ok, invalidate, serializable, UserError, type ActionResult } from "./util";
 
-export type PlaceOrderInput = PlaceOrderData;
+export type PlaceOrderInput = PlaceOrderData & { saveDetails?: boolean };
 
 /**
  * Place an order. Prices are read from the database (never trusted from the
  * browser), stock is checked against the ledger, and the order, its stock
  * movements and its first timeline event are written in one serializable
- * transaction so two shoppers can't buy the same last kilo.
+ * transaction so two shoppers can't buy the same last kilo. With `saveDetails`
+ * the delivery details also go on the account, in that same transaction, so a
+ * failed order never changes what's saved.
  */
 export async function placeOrder(input: PlaceOrderInput): Promise<ActionResult<{ code: string; total: number }>> {
   const user = await getUser();
@@ -21,7 +23,14 @@ export async function placeOrder(input: PlaceOrderInput): Promise<ActionResult<{
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Check your order details.");
 
   try {
-    const { code, total } = await serializable(tx => createOrderTx(tx, user.id, parsed.data));
+    const { code, total } = await serializable(async tx => {
+      const placed = await createOrderTx(tx, user.id, parsed.data);
+      if (input.saveDetails === true) {
+        const { phone, address, barangay } = parsed.data.delivery;
+        await tx.user.update({ where: { id: user.id }, data: { phone, address, barangay } });
+      }
+      return placed;
+    });
     invalidate("shop", "orders", "admin");
     return ok({ code, total });
   } catch (err) {

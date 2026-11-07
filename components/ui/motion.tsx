@@ -28,18 +28,21 @@ export function Stamp({
   tone = "marker",
   rotate = -8,
   delay = 0,
+  still = false,
   className = "",
 }: {
   children: ReactNode;
   tone?: keyof typeof STAMP_TONE;
   rotate?: number;
   delay?: number;
+  /** Already stamped: render in place with no thump. */
+  still?: boolean;
   className?: string;
 }) {
   const reduce = useReducedMotion();
   return (
     <motion.span
-      initial={reduce ? false : { scale: 2.4, opacity: 0, rotate: rotate - 14 }}
+      initial={reduce || still ? false : { scale: 2.4, opacity: 0, rotate: rotate - 14 }}
       animate={{ scale: 1, opacity: 1, rotate }}
       transition={{ type: "spring", stiffness: 600, damping: 17, mass: 0.9, delay }}
       className={`sign inline-block rounded-md border-[3px] px-3 pb-1 pt-1.5 outline-2 outline-offset-2 outline-current/50 [outline-style:solid] mix-blend-multiply opacity-90 ${STAMP_TONE[tone]} ${className}`}

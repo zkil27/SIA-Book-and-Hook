@@ -32,6 +32,10 @@ model User {
   email          String             @unique
   passwordHash   String
   role           Role               @default(CUSTOMER)
+  // Saved delivery details: prefill checkout. Orders keep their own snapshot.
+  phone          String?
+  address        String?
+  barangay       String?
   orders         Order[]
   stockMovements StockMovement[] // movements this staff member recorded
   statusEvents   OrderStatusEvent[] // status changes this staff member made

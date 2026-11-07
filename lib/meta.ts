@@ -84,6 +84,18 @@ export const PAYMENT_LABEL = { GCASH: "GCash", COD: "Cash on delivery" } as cons
 
 export const DELIVERY_SLOTS = ["6:00–8:00 AM", "8:00–10:00 AM", "10:00 AM–12:00 NN"] as const;
 
+/** The part of a delivery that can be saved on an account. */
+export type DeliveryContact = { phone: string; address: string; barangay: string };
+
+/** Philippine mobile number, e.g. 0917 123 4567. */
+export const PHONE_RE = /^(\+?63|0)9\d{2}[\s-]?\d{3}[\s-]?\d{4}$/;
+
+export const BARANGAYS = [
+  "Burol", "Datu Esmael", "Emmanuel Bergado", "Fatima", "Langkaan", "Luzviminda", "Paliparan",
+  "Sabang", "Salawag", "Salitran", "Sampaloc", "San Agustin", "San Jose", "San Miguel",
+  "Santa Cruz", "Santa Fe", "Victoria Reyes", "Zone I", "Zone II", "Zone III", "Zone IV",
+];
+
 // ── Stock ────────────────────────────────────────────────────────────────────
 export const LOW_STOCK_AT = 10;
 export const TO_SALE_AFTER_DAYS = 7;

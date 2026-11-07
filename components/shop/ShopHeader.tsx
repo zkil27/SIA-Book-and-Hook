@@ -42,7 +42,7 @@ export function ShopHeader({ user }: { user: { name: string | null; role: "ADMIN
   const account = user
     ? user.role === "ADMIN"
       ? { href: "/admin", label: "Staff admin" }
-      : { href: "/account", label: "My orders" }
+      : { href: "/account", label: "My account" }
     : { href: `/login?next=${encodeURIComponent(pathname)}`, label: "Sign in" };
 
   const search = (

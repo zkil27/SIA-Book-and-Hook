@@ -15,7 +15,9 @@ by hand in the same commit as any schema change.
 ### User
 A person with an account. The `role` field is an enum — `ADMIN` or `CUSTOMER` —
 and it is the only thing separating a staff member from a shopper. Passwords are
-stored hashed, never in plain text.
+stored hashed, never in plain text. `phone`, `address` and `barangay` are the
+customer's saved delivery details: optional, one set per account, used to prefill
+checkout and editable on `/account`.
 
 ### Category
 A grouping of products, e.g. "Fish", "Shellfish", "Crustaceans". A product
@@ -173,6 +175,12 @@ than mysterious, which is the client's actual pain point.
 
 **Why copy the price onto OrderItem?**
 So that historical orders stay historically accurate when prices change.
+
+**Why does a delivery address live on both User and Order?**
+They mean different things. `User.address` is where the customer usually wants
+delivery, and it can change at any time. `Order.deliveryAddress` is where that
+order actually went, so it is a snapshot, for the same reason as `priceAtTime`.
+If orders read from the account, moving house would rewrite delivery history.
 
 **Why are products archived rather than deleted?**
 Orders reference variants. Deleting a product would orphan or destroy order

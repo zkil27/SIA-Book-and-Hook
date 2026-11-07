@@ -69,7 +69,7 @@ can only add to it, never edit or delete. Those two phrases are worth memorizing
 
 | User | What they can do |
 |---|---|
-| **Customer** | Browse the catalog, filter by category, view a product's price and stock, build a shopping cart, go through checkout, track an order by its ID, and see their own past orders. |
+| **Customer** | Browse the catalog, filter by category, view a product's price and stock, build a shopping cart, go through checkout, track an order by its ID, reopen and print its receipt, see their own past orders, and keep one saved phone number and address that fills in checkout for them. |
 | **Admin / staff** | Everything a customer can't: add/edit products, manage categories, adjust stock (with a reason), review orders and update their status, and see a simple dashboard. |
 
 The only thing separating the two is a label on their account called a **role**
@@ -78,6 +78,11 @@ get bounced out.
 
 A few behaviours worth knowing (2026-11-05):
 
+- **Receipts can be reopened.** The checkout receipt also lives at
+  `/receipt/HB-0005`, linked from the tracking page, and can be printed or saved
+  as a PDF. Like tracking, it opens with just the order code, so it leaves out
+  delivery details. It shows the payment method but never says "Paid", and it
+  states that it isn't an official receipt.
 - **Cancelling an order needs a sign-in.** On the tracking page, a signed-out
   visitor sees "Sign in to cancel" instead of the Cancel button, and only the
   order's own customer (or staff) can cancel it.
@@ -99,6 +104,9 @@ everyday language:
 
 1. **User** — a person with an account. We never store the actual password;
    we store a scrambled version of it (called a "hash") so even we can't read it.
+   Customers can also keep a saved phone number and address here. Each order
+   still keeps its own copy, so changing the saved address never changes where a
+   past order went.
 2. **Category** — a grouping like "Fish", "Shellfish", "Crustaceans".
 3. **Product** — a thing customers recognize, like "Bangus (Milkfish)". Notice a
    product has **no price and no stock** by itself — see the next bucket for why.
@@ -237,7 +245,7 @@ If someone says "show me where X is," here's the map:
 
 | Folder / file | What's in it |
 |---|---|
-| `app/(shop)/` | The storefront pages: catch (`page.tsx`), product (`p/[id]`), checkout, track, account, login/register, about. |
+| `app/(shop)/` | The storefront pages: catch (`page.tsx`), product (`p/[id]`), checkout, track, receipt (`receipt/[code]`), account, login/register, about. |
 | `app/(admin)/admin/` | The staff admin: Today, orders, stock (walk-in / adjust / morning count), prices, products, categories, ledger. |
 | `components/` | The building blocks: `shop/` (basket, price cards, checkout), `admin/` (orders board, stock desk, ledger), `ui/` (buttons, price tag, stamp, toasts). |
 | `prisma/schema.prisma` | The definition of the eight buckets. The single source of truth for the data. |
@@ -245,6 +253,7 @@ If someone says "show me where X is," here's the map:
 | `lib/catalog-data.ts` | The catalog itself (names, prices, photos, dishes), shared by the seed and the offline fallback. |
 | `lib/catalog.ts` / `lib/admin-data.ts` | Read the data for the storefront and the admin; stock is always the sum of the ledger, added up by the database (`lib/stock-sql.ts`). |
 | `lib/orders-core.ts` | The order-writing logic shared by checkout, staff cancellation and the dev test scenarios. |
+| `lib/account.ts` | Reads a customer's saved delivery details for the account page and checkout. |
 | `app/(admin)/admin/dev/` | Developer tools (hidden, allowlisted): health, checks, timings, test orders, UI gallery. |
 | `lib/actions/` | Everything that changes data (checkout, order status, stock, prices, products) — each stock change is a new ledger row. |
 | `lib/prisma.ts` | The one safe way our code talks to the database. |

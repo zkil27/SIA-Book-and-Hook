@@ -58,6 +58,7 @@ export default async function TrackPage(props: PageProps<"/track">) {
         )}
         {result && result !== "offline" && (() => {
           const canCancel = result.status === "PENDING" || result.status === "CONFIRMED";
+          const subtotal = result.items.reduce((s, i) => s + i.price * i.qty, 0);
           return (
             <div className="rounded-[var(--radius-card)] bg-paper p-5 ring-1 ring-inset ring-ice-3 sm:p-8">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -68,6 +69,9 @@ export default async function TrackPage(props: PageProps<"/track">) {
                 </div>
                 <div className="flex flex-wrap items-center gap-2.5">
                   <StatusChip status={result.status} />
+                  <Link href={`/receipt/${result.code}`} className="text-sm font-semibold text-teal-deep underline">
+                    View receipt
+                  </Link>
                   {canCancel &&
                     (user ? (
                       <CancelOrderDialog code={result.code} />
@@ -103,6 +107,10 @@ export default async function TrackPage(props: PageProps<"/track">) {
                 <dd className="text-right font-semibold">{PAYMENT_LABEL[result.payment]}</dd>
                 <dt className="text-ink-3">Slot</dt>
                 <dd className="text-right font-semibold">{result.slot || "—"}</dd>
+                <dt className="text-ink-3">Subtotal</dt>
+                <dd className="tabular text-right font-semibold">{peso(subtotal)}</dd>
+                <dt className="text-ink-3">Delivery</dt>
+                <dd className="tabular text-right font-semibold">{result.fee === 0 ? "Free" : peso(result.fee)}</dd>
                 <dt className="text-ink-3">Total</dt>
                 <dd className="tabular text-right text-lg font-bold">{peso(result.total)}</dd>
               </dl>

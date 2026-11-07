@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight, LogOut } from "lucide-react";
+import { getDeliveryProfile } from "@/lib/account";
 import { listMyOrders } from "@/lib/orders";
 import { requireUser } from "@/lib/session";
 import { logoutAction } from "@/lib/actions/auth";
@@ -9,20 +10,22 @@ import { splitName } from "@/lib/meta";
 import { peso } from "@/lib/money";
 import { fmtDateTime } from "@/lib/time";
 import { Button, ButtonLink, StatusChip } from "@/components/ui/primitives";
+import { DeliveryDetailsCard } from "@/components/shop/DeliveryDetailsCard";
 
-export const metadata: Metadata = { title: "My orders" };
+export const metadata: Metadata = { title: "My account" };
 
 export default async function AccountPage() {
   const user = await requireUser("/account");
-  const orders = await listMyOrders(user.id);
+  const [orders, profile] = await Promise.all([listMyOrders(user.id), getDeliveryProfile(user.id)]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 pt-8 sm:px-6 sm:pt-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="sign text-[clamp(44px,6vw,72px)] text-ink">My orders</h1>
-          <p className="mt-1 text-ink-2">
+        <div className="min-w-0">
+          <h1 className="sign text-[clamp(44px,6vw,72px)] text-ink">My account</h1>
+          <p className="mt-1 break-words text-ink-2">
             Signed in as <strong className="text-ink">{user.name ?? user.email}</strong>
+            {user.name && ` · ${user.email}`}
           </p>
         </div>
         <form action={logoutAction}>
@@ -33,6 +36,11 @@ export default async function AccountPage() {
       </div>
 
       <div className="mt-8">
+        <DeliveryDetailsCard saved={profile === "offline" ? null : profile} offline={profile === "offline"} />
+      </div>
+
+      <h2 className="mb-4 mt-10 text-xl font-bold text-ink">Orders</h2>
+      <div>
         {orders === "offline" ? (
           <p className="rounded-xl bg-paper p-5 text-ink-2 ring-1 ring-inset ring-ice-3">
             Our order system is offline for a moment. Try again in a minute.

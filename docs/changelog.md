@@ -5,6 +5,43 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-11-07 — Reopenable, printable order receipts
+
+**What:**
+- New `components/shop/ReceiptSlip.tsx`: the slip moved out of `CheckoutFlow.tsx`, now presentational and shared. It animates at checkout and renders still elsewhere. It shows the live status, a placed date when reopened, a "Cancelled" stamp for cancelled orders, and a line saying it is not an official receipt or sales invoice.
+- New `app/(shop)/receipt/[code]/page.tsx` (reads through `findOrderByNumber`) and `components/shop/PrintButton.tsx` (`window.print()`).
+- `components/ui/motion.tsx`: `Stamp` gains a `still` prop.
+- `app/globals.css`: a print rule that keeps only `.print-area` on pages holding a receipt.
+- `app/(shop)/track/page.tsx`: "View receipt" link, plus Subtotal and Delivery rows above Total.
+- `components/shop/CheckoutFlow.tsx`: uses the shared slip and adds a "Print or save receipt" link.
+
+**Why:** User decision. The receipt only existed in client state at checkout and was lost on refresh, while `/track` told customers to use "the code from your receipt". `/track` also hid the delivery fee, so a ₱50-fee order didn't visibly add up.
+
+**Impact:**
+- Read-only view of stored order data: no schema change, migration or new dependency. Stored prices mean old receipts stay accurate after price changes.
+- `/receipt/[code]` is public like `/track` (user decision), so it shows no delivery name, phone or address. Codes are sequential, so items and totals are readable by anyone who guesses one.
+- The slip never says "Paid", because the system records a method and settles nothing. Its status now reads "Pending" at checkout, not "Pending confirmation".
+- No email, SMS or PDF library. Browser Save as PDF covers downloads. Walk-in sales create no `Order`, so they have no receipt.
+- Docs updated: `scope.md`, `project-overview.md`, `demo-runbook.md`.
+
+## 2026-11-07 — Saved delivery details on the customer account
+
+**What:**
+- Schema: nullable `phone`, `address`, `barangay` on `User`. Migration `20261107000000_add_user_delivery_details` adds them and backfills each customer from their most recent order. `prisma/seed.ts` gives the demo customers fictional details.
+- `lib/account.ts`: `getDeliveryProfile()` (read). `lib/actions/account.ts`: `saveDeliveryDetails()` (write). `placeOrder` in `lib/actions/checkout.ts` takes `saveDetails` and writes to the account in the same transaction as the order.
+- Shared rules: `ContactSchema` in `lib/orders-core.ts`; `PHONE_RE`, `BARANGAYS` and `DeliveryContact` in `lib/meta.ts` (the phone regex and barangay list used to live in `CheckoutFlow.tsx`).
+- UI: new `components/shop/DeliveryFields.tsx` (shared inputs) and `components/shop/DeliveryDetailsCard.tsx` (saved, empty, editing and offline states). `/account` shows the card above an "Orders" section and now also shows the email. Checkout prefills from the account and offers a save checkbox.
+- `/account` is now titled "My account", and the header and footer links were renamed from "My orders" to match.
+
+**Why:** User report: customers enter a phone and address at checkout, but nothing was there after signing in. `User` had neither field; they only existed as per-order snapshots, so checkout started blank every time.
+
+**Impact:**
+- Migration **already applied** to the shared Supabase project: 10 of 13 users were backfilled, and the other 3 have no orders. It must stay ahead of any deploy of this code, because `auth.ts` reads every `User` column at login.
+- `Order.delivery*` is unchanged and stays the record of where an order went. Editing the account never changes a past order.
+- Checkbox rule: shown and ticked when nothing is saved, hidden when the form matches the saved details, shown and unticked when they differ, so a one-off order can't replace the home address.
+- One saved address per account. The receiver's name stays per order, and the account name is not editable (it lives in the JWT).
+- No `prisma db seed` needed. Docs updated: `data-model.md`, `diagrams/erd.mmd`, `scope.md`, `project-overview.md`, `AGENTS.md`.
+
 ## 2026-11-06 — Add "Bad weather" as a quick cancel reason
 
 **What:** Added "Bad weather (no delivery)" to the quick-pick cancel reasons in the admin cancel sheet (`CANCEL_REASONS` in `components/admin/OrdersBoard.tsx`).

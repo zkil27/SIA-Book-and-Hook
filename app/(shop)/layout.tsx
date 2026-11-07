@@ -87,7 +87,7 @@ function ShopFooter() {
           <ul className="mt-2 flex flex-col gap-1.5 text-ink-2">
             <li><Link href="/" className="hover:text-ink hover:underline">Today&apos;s catch</Link></li>
             <li><Link href="/track" className="hover:text-ink hover:underline">Track an order</Link></li>
-            <li><Link href="/account" className="hover:text-ink hover:underline">My orders</Link></li>
+            <li><Link href="/account" className="hover:text-ink hover:underline">My account</Link></li>
             <li><Link href="/about" className="hover:text-ink hover:underline">About &amp; contact</Link></li>
           </ul>
         </nav>

@@ -1,4 +1,4 @@
-%% Hook & Box ERD — derived from prisma/schema.prisma (2026-10-10).
+%% Hook & Box ERD — derived from prisma/schema.prisma (2026-11-07).
 %% If this and the schema ever disagree, the schema wins; update this file.
 erDiagram
   User ||--o{ Order : places
@@ -18,6 +18,9 @@ erDiagram
     string email UK
     string passwordHash
     Role role "ADMIN | CUSTOMER"
+    string phone "saved delivery details, optional"
+    string address "saved delivery details, optional"
+    string barangay "saved delivery details, optional"
     datetime createdAt
   }
   Category {

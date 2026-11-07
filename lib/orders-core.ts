@@ -2,7 +2,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { deliveryFeeFor } from "@/lib/money";
-import { DELIVERY_SLOTS, orderCode, type OrderStatusKey } from "@/lib/meta";
+import { DELIVERY_SLOTS, orderCode, PHONE_RE, type OrderStatusKey } from "@/lib/meta";
 import { UserError } from "@/lib/actions/util";
 
 /**
@@ -12,18 +12,19 @@ import { UserError } from "@/lib/actions/util";
  * authenticate first, then run these inside `serializable()`.
  */
 
+/** Phone and address rules, shared by checkout and the account page. */
+export const ContactSchema = z.object({
+  phone: z.string().trim().regex(PHONE_RE, "Enter a mobile number like 0917 123 4567."),
+  address: z.string().trim().min(5, "Enter a street address or house number."),
+  barangay: z.string().trim().min(2, "Enter your barangay."),
+});
+
 export const PlaceOrderSchema = z.object({
   items: z
     .array(z.object({ variantId: z.string().min(1), qty: z.number().int().min(1).max(50) }))
     .min(1, "Your basket is empty."),
-  delivery: z.object({
+  delivery: ContactSchema.extend({
     name: z.string().trim().min(2, "Enter the name of the person receiving the order."),
-    phone: z
-      .string()
-      .trim()
-      .regex(/^(\+?63|0)9\d{2}[\s-]?\d{3}[\s-]?\d{4}$/, "Enter a mobile number like 0917 123 4567."),
-    address: z.string().trim().min(5, "Enter a street address or house number."),
-    barangay: z.string().trim().min(2, "Enter your barangay."),
     slot: z.enum(DELIVERY_SLOTS),
   }),
   payment: z.enum(["GCASH", "COD"]),

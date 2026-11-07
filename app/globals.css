@@ -195,3 +195,18 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── Print ──────────────────────────────────────────────────────────────── */
+
+/* A page holding a receipt prints only the slip. Other pages are untouched. */
+@media print {
+  body:has(.print-area) *:not(:has(.print-area), .print-area, .print-area *) {
+    display: none;
+  }
+
+  .print-area,
+  .print-area * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

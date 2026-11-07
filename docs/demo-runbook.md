@@ -29,7 +29,8 @@ have a bigger problem than the demo, and you want to discover that on the 4th.
 Open the live URL. Filter a category or a dish ("Cook it as: Sinigang"). Open a
 product, switch 1kg ↔ 500g (the scale needle swings) and tap Add (the photo
 flies into the basket). Sign in as `maria@example.com`, check out, and show the
-printed receipt with its HB code, then **Track this order**.
+printed receipt with its HB code, then **Track this order**. **View receipt**
+reopens the same slip, ready to print.
 > "This is deployed and running against a real Postgres database — everything on
 > screen is coming from the database, not mock data. Placing that order just
 > took the stock off the shelf in the ledger."
