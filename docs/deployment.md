@@ -31,7 +31,11 @@ Connection string → URI. You'll see pooled and direct options.
 `connect_timeout` and `pool_timeout` (seconds) make a paused or unreachable
 database fail fast, so the storefront switches to its offline catalog in a few
 seconds instead of waiting on Prisma's defaults. Don't add `connection_limit=1`:
-it would make each request's parallel queries run one at a time.
+it would make each request's parallel queries run one at a time. **Do** set
+`connection_limit=3` on Vercel (2026-11-07): without it each function
+instance opens a pool of 2 × CPU + 1 connections, and many warm instances can
+exhaust Supavisor's pool. Three still lets a page's parallel queries run
+together.
 
 Other environment variables:
 
@@ -98,6 +102,43 @@ npx prisma migrate deploy
 The migration was written to match `prisma migrate diff` output exactly, so a
 later `migrate dev` sees no drift. Use `migrate deploy` against the shared
 Supabase database, never `migrate dev` (it can offer to reset on drift).
+
+### 2026-11-08: trips, staff roles, handoff PIN
+
+`prisma/migrations/20261108000000_trips_staff_handoff` adds the `PACKER` and
+`DRIVER` roles, the `PACKED` order status (before `READY`), the `Trip` table and
+`TripStatus` enum, and new `Order` columns (`deliveryDate`, `tripId`,
+`stopIndex`, `loadedAt`, `handoffPin`, `pinAttempts`). It backfills
+`deliveryDate` on existing orders with the checkout rule; nothing else is
+rewritten. Existing orders have no PIN, so drivers finish them with a reason.
+
+**Apply it before deploying the code** (order reads select every column):
+
+```powershell
+npx prisma migrate deploy
+npx prisma db seed   # optional: demo trips, packer and driver accounts (wipes orders)
+```
+
+Postgres enum values can't be removed once added, so rolling back means a
+forward migration, not a revert. The tracking link signs order numbers with
+`AUTH_SECRET`, which NextAuth already requires in every environment; rotating
+it invalidates every shared tracking link.
+
+### 2026-11-07: speed pass 2 (indexes + relationJoins)
+
+`prisma/migrations/20261109000000_perf_indexes` is index-only (no table or
+data changes): `StockMovement(variantId, quantity)`, `Order(createdAt)`,
+`OrderStatusEvent(toStatus, createdAt)`. The schema also turns on the
+`relationJoins` preview feature, which needs a regenerated client (the
+`build` script already runs `prisma generate`).
+
+```powershell
+npx prisma migrate deploy
+npx prisma generate   # locally; stop `npm run dev` first or Windows locks the engine file
+```
+
+Then add `connection_limit=3` to `DATABASE_URL` in Vercel (all environments)
+and redeploy. See `docs/performance.md`.
 
 ### Developer admin account
 

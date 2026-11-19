@@ -53,7 +53,7 @@ export function unitFor(variantName: string): string {
 }
 
 // ── Orders ───────────────────────────────────────────────────────────────────
-export type OrderStatusKey = "PENDING" | "CONFIRMED" | "READY" | "COMPLETED" | "CANCELLED";
+export type OrderStatusKey = "PENDING" | "CONFIRMED" | "PACKED" | "READY" | "COMPLETED" | "CANCELLED";
 
 export function orderCode(orderNumber: number): string {
   return `HB-${String(orderNumber).padStart(4, "0")}`;
@@ -67,18 +67,115 @@ export function parseOrderCode(input: string): number | null {
   return n > 0 ? n : null;
 }
 
+/**
+ * Staff see one vocabulary everywhere: the chip on an order, the Orders tab
+ * that lists it and the pipeline strip all say the same words, phrased as
+ * the job waiting on it ("To confirm", "To pack"). `done` is the past-tense
+ * event used on timelines and toasts ("Confirmed", "Packed").
+ */
 export const STATUS_META: Record<
   OrderStatusKey,
-  { label: string; customer: string; tone: "yellow" | "teal" | "violet" | "green" | "gray"; next?: OrderStatusKey; nextLabel?: string }
+  {
+    label: string;
+    done: string;
+    /** Short status for customer-facing chips (account, tracking). */
+    shopLabel: string;
+    customer: string;
+    tone: "yellow" | "teal" | "cardboard" | "violet" | "green" | "gray";
+    next?: OrderStatusKey;
+    nextLabel?: string;
+  }
 > = {
-  PENDING: { label: "Pending", customer: "Order placed", tone: "yellow", next: "CONFIRMED", nextLabel: "Confirm" },
-  CONFIRMED: { label: "Confirmed", customer: "Confirmed and packing", tone: "teal", next: "READY", nextLabel: "Mark ready" },
-  READY: { label: "Out for delivery", customer: "Out for delivery", tone: "violet", next: "COMPLETED", nextLabel: "Mark delivered" },
-  COMPLETED: { label: "Delivered", customer: "Delivered", tone: "green" },
-  CANCELLED: { label: "Cancelled", customer: "Cancelled", tone: "gray" },
+  PENDING: { label: "To confirm", done: "Order placed", shopLabel: "Pending", customer: "Order placed", tone: "yellow", next: "CONFIRMED", nextLabel: "Confirm" },
+  CONFIRMED: { label: "To pack", done: "Confirmed", shopLabel: "Confirmed", customer: "Confirmed, being packed", tone: "teal", next: "PACKED", nextLabel: "Mark packed" },
+  // Packed → On the truck happens only when the driver starts the trip.
+  PACKED: { label: "Packed", done: "Packed", shopLabel: "Packed", customer: "Packed, waiting for the truck", tone: "cardboard", next: "READY" },
+  READY: { label: "On the truck", done: "Put on the truck", shopLabel: "On the truck", customer: "On the truck to you", tone: "violet", next: "COMPLETED", nextLabel: "Mark delivered" },
+  COMPLETED: { label: "Delivered", done: "Delivered", shopLabel: "Delivered", customer: "Delivered", tone: "green" },
+  CANCELLED: { label: "Cancelled", done: "Cancelled", shopLabel: "Cancelled", customer: "Cancelled", tone: "gray" },
 };
 
-export const STATUS_FLOW: OrderStatusKey[] = ["PENDING", "CONFIRMED", "READY", "COMPLETED"];
+export const STATUS_FLOW: OrderStatusKey[] = ["PENDING", "CONFIRMED", "PACKED", "READY", "COMPLETED"];
+
+/** Statuses still in the store's hands (shown in admin "to handle" lists). */
+export const OPEN_STATUSES = ["PENDING", "CONFIRMED", "PACKED", "READY"] as const satisfies readonly OrderStatusKey[];
+
+/**
+ * Statuses the office may advance with one tap. Packed → On the truck belongs
+ * to the trip, and On the truck → Delivered to the driver's handoff (or an
+ * office override with a written reason).
+ */
+export const OFFICE_ADVANCE: readonly OrderStatusKey[] = ["PENDING", "CONFIRMED"];
+
+// ── Delivery trips ───────────────────────────────────────────────────────────
+export type TripStatusKey = "PLANNED" | "OUT" | "RETURNED" | "REMITTED";
+
+export const TRIP_STATUS_META: Record<TripStatusKey, { label: string; tone: "yellow" | "violet" | "teal" | "green" }> = {
+  PLANNED: { label: "Being loaded", tone: "yellow" },
+  OUT: { label: "On the road", tone: "violet" },
+  RETURNED: { label: "Back, count the cash", tone: "teal" },
+  REMITTED: { label: "Closed", tone: "green" },
+};
+
+export function tripCode(tripNumber: number): string {
+  return `T-${String(tripNumber).padStart(3, "0")}`;
+}
+
+/** Orders per delivery slot per day: what one truck run can carry. */
+export const SLOT_CAPACITY = 12;
+
+/** Wrong PIN entries before the PIN locks and only a logged reason can finish the stop. */
+export const PIN_MAX_TRIES = 5;
+
+/** Suggested vehicle labels (free text is allowed). Labels only, no fleet records. */
+export const VEHICLES = ["Truck 1", "Motorbike 1", "Motorbike 2"] as const;
+
+/** Why a driver finished a stop without the customer's PIN. */
+export const HANDOFF_FALLBACK_REASONS = [
+  "Received by a household member",
+  "Customer couldn't open their PIN",
+  "PIN locked after wrong tries",
+  "Order placed before PINs",
+] as const;
+
+/** Why a driver brought an order back. */
+export const FAILED_STOP_REASONS = [
+  "No one home",
+  "Couldn't find the address",
+  "Couldn't reach the customer by phone",
+  "Customer refused the order",
+  "Road blocked or flooded",
+] as const;
+
+/**
+ * The truck's fixed loop out of the stall, so drafted trips start in a
+ * sensible stop order. Set by the store (fictional); the office can reorder.
+ * Barangays not listed go last.
+ */
+export const BARANGAY_ROUTE = [
+  "Zone I", "Zone II", "Zone III", "Zone IV", "San Agustin", "Burol", "Datu Esmael", "Victoria Reyes",
+  "Sampaloc", "San Jose", "Santa Cruz", "Santa Fe", "San Miguel", "Luzviminda", "Emmanuel Bergado",
+  "Fatima", "Sabang", "Langkaan", "Salitran", "Paliparan", "Salawag",
+];
+
+export function routeRank(barangay: string): number {
+  const i = BARANGAY_ROUTE.findIndex(b => b.toLowerCase() === barangay.trim().toLowerCase());
+  return i === -1 ? BARANGAY_ROUTE.length : i;
+}
+
+/** Slot order for sorting: 0, 1, 2; unknown slots last. */
+export function slotRank(slot: string): number {
+  const i = (DELIVERY_SLOTS as readonly string[]).indexOf(slot);
+  return i === -1 ? DELIVERY_SLOTS.length : i;
+}
+
+/** "6:00–8:00 AM" → "6–8 AM", for tight spots like the bag label. */
+export function shortSlot(slot: string): string {
+  return slot.replace(/:00/g, "").replace(/ AM–(\d+) AM/, "–$1 AM").replace("12 NN", "12 noon");
+}
+
+/** "Maria" from "Maria Santos": what a bag label and the load list show. */
+export const firstName = (name: string) => name.trim().split(/\s+/)[0] || "Customer";
 
 export const PAYMENT_LABEL = { GCASH: "GCash", COD: "Cash on delivery" } as const;
 

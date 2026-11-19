@@ -1,8 +1,10 @@
 import "server-only";
+import { randomInt } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { deliveryFeeFor } from "@/lib/money";
-import { DELIVERY_SLOTS, orderCode, PHONE_RE, type OrderStatusKey } from "@/lib/meta";
+import { DELIVERY_SLOTS, orderCode, PHONE_RE, SLOT_CAPACITY, type OrderStatusKey } from "@/lib/meta";
+import { deliveryDateFor, fmtDay } from "@/lib/time";
 import { UserError } from "@/lib/actions/util";
 
 /**
@@ -37,7 +39,20 @@ export type CreateOrderOpts = {
   reasonSuffix?: string;
   /** Note on the first timeline event. Default "Placed online". */
   note?: string;
+  /**
+   * Skip the slot capacity check. Only the dev test scenarios set this, so a
+   * rush test measures stock contention, not a full slot.
+   */
+  skipCapacity?: boolean;
 };
+
+/** A fresh 4-digit handoff PIN. Only the customer is ever shown it. */
+export const newHandoffPin = () => String(randomInt(0, 10000)).padStart(4, "0");
+
+/** Orders already booked into a delivery slot (cancelled ones free their place). */
+export function bookedInSlot(tx: Prisma.TransactionClient, deliveryDate: Date, slot: string) {
+  return tx.order.count({ where: { deliveryDate, deliverySlot: slot, status: { not: "CANCELLED" } } });
+}
 
 /**
  * Create an order: prices read from the database (never trusted from the
@@ -50,8 +65,16 @@ export async function createOrderTx(
   customerId: string,
   data: PlaceOrderData,
   opts: CreateOrderOpts = {}
-): Promise<{ orderId: string; code: string; total: number }> {
+): Promise<{ orderId: string; code: string; total: number; deliveryDate: Date }> {
   const { items, delivery, payment } = data;
+
+  // One truck run per slot: refuse the order once the slot is full. Inside
+  // the caller's serializable transaction, two shoppers can't both take the
+  // last place.
+  const deliveryDate = deliveryDateFor(new Date());
+  if (!opts.skipCapacity && (await bookedInSlot(tx, deliveryDate, delivery.slot)) >= SLOT_CAPACITY) {
+    throw new UserError(`The ${delivery.slot} slot on ${fmtDay(deliveryDate)} just filled up. Pick another slot.`);
+  }
 
   // Merge duplicate lines for the same variant.
   const qtyById = new Map<string, number>();
@@ -97,6 +120,8 @@ export async function createOrderTx(
       deliveryAddress: delivery.address,
       deliveryBarangay: delivery.barangay,
       deliverySlot: delivery.slot,
+      deliveryDate,
+      handoffPin: newHandoffPin(),
       deliveryFeeCentavos: fee,
       totalCentavos: subtotal + fee,
       items: {
@@ -120,7 +145,7 @@ export async function createOrderTx(
     })),
   });
 
-  return { orderId: order.id, code, total: subtotal + fee };
+  return { orderId: order.id, code, total: subtotal + fee, deliveryDate };
 }
 
 /**
@@ -158,7 +183,11 @@ export async function cancelOrderTx(
       })),
     });
   }
-  await tx.order.update({ where: { id: order.id }, data: { status: "CANCELLED" } });
+  // A cancelled order also leaves any trip it was planned on.
+  await tx.order.update({
+    where: { id: order.id },
+    data: { status: "CANCELLED", tripId: null, stopIndex: null, loadedAt: null },
+  });
   await tx.orderStatusEvent.create({
     data: { orderId: order.id, fromStatus: order.status, toStatus: "CANCELLED", actorId, note },
   });

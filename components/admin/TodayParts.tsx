@@ -2,19 +2,25 @@
 
 import { useState, useTransition } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Check } from "lucide-react";
+import { Check, Printer } from "lucide-react";
 import { advanceOrder, revertOrder } from "@/lib/actions/admin-orders";
+import { labelFromAdmin } from "@/components/staff/BagLabel";
+import { usePrintLabels, usePrintOnConfirm } from "@/components/staff/PrintLabels";
 import { peso } from "@/lib/money";
 import { fmtWeekday } from "@/lib/time";
 import { Button } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 
-/** One-tap confirm from the Today inbox, with Undo. */
-export function ConfirmButton({ orderId, code }: { orderId: string; code: string }) {
+/** One-tap confirm from the Today inbox (prints the bag label when switched on), with Undo. */
+export function ConfirmButton({ orderId, code, label }: { orderId: string; code: string; label: Parameters<typeof labelFromAdmin>[0] }) {
   const toast = useToast();
   const [pending, start] = useTransition();
   const [done, setDone] = useState(false);
+  const [printOn] = usePrintOnConfirm();
+  const { print, sheet } = usePrintLabels();
   return (
+    <>
+    {sheet}
     <Button
       size="sm"
       variant={done ? "outline" : "primary"}
@@ -25,9 +31,10 @@ export function ConfirmButton({ orderId, code }: { orderId: string; code: string
           const res = await advanceOrder(orderId, "PENDING");
           if (!res.ok) return toast({ title: "Couldn't confirm", description: res.error, tone: "error" });
           setDone(true);
+          if (printOn) print([labelFromAdmin(label)]);
           toast({
             title: `${code} confirmed`,
-            description: "Moved to packing.",
+            description: printOn ? "Label sent to the printer. It now waits in To pack." : "It now waits in To pack.",
             undo: async () => {
               const r = await revertOrder(orderId, "CONFIRMED", "PENDING");
               if (!r.ok) toast({ title: "Couldn't undo", description: r.error, tone: "error" });
@@ -37,9 +44,10 @@ export function ConfirmButton({ orderId, code }: { orderId: string; code: string
         })
       }
     >
-      {done ? <Check className="size-4" aria-hidden /> : null}
-      {done ? "Confirmed" : "Confirm"}
+      {done ? <Check className="size-4" aria-hidden /> : printOn ? <Printer className="size-3.5" aria-hidden /> : null}
+      {done ? "Confirmed" : printOn ? "Confirm & print" : "Confirm"}
     </Button>
+    </>
   );
 }
 

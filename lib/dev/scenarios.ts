@@ -26,7 +26,7 @@ export const DEV_CLEANUP_NOTE = "Dev test cleanup";
 export const MAX_TEST_ORDERS = 10;
 export const MAX_RUSH_ORDERS = 20;
 
-const OPEN = ["PENDING", "CONFIRMED", "READY"] as const;
+const OPEN = ["PENDING", "CONFIRMED", "PACKED", "READY"] as const;
 
 export async function ensureTestCustomer(): Promise<string> {
   const existing = await prisma.user.findUnique({ where: { email: DEV_TEST_EMAIL }, select: { id: true } });

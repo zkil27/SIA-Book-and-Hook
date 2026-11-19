@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { signIn, signOut } from "@/auth";
+import { canOpen, homeFor, isGated, ROLE_LABEL } from "@/lib/roles";
 
 export type FormState = { error: string | null; fields?: Record<string, string> };
 
@@ -19,13 +20,21 @@ export async function loginAction(_prev: FormState, form: FormData): Promise<For
   const next = safeNext(form.get("next"));
   if (!email || !password) return { error: "Enter your email and password.", fields: { email } };
 
-  // Staff go to the admin after signing in unless a page asked for somewhere else.
+  // Staff go to their own area after signing in (admin, packing, trips) unless
+  // a page asked for somewhere else.
   let target = next;
   try {
     const user = await prisma.user.findUnique({ where: { email }, select: { role: true } });
-    if (user?.role === "ADMIN" && next === "/") target = "/admin";
-    if (user?.role !== "ADMIN" && next.startsWith("/admin")) {
-      return { error: "This account doesn't have staff access. Sign in with a staff account.", fields: { email } };
+    const role = user?.role ?? "CUSTOMER";
+    if (next === "/") target = homeFor(role);
+    if (user && isGated(next) && !canOpen(role, next)) {
+      return {
+        error:
+          role === "CUSTOMER"
+            ? "This account doesn't have staff access. Sign in with a staff account."
+            : `This page isn't part of the ${ROLE_LABEL[role].toLowerCase()} account. Sign in with the right staff account.`,
+        fields: { email },
+      };
     }
   } catch {
     return { error: "Can't reach the store database right now. Try again in a minute.", fields: { email } };

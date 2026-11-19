@@ -45,12 +45,15 @@ export async function oldestInflowByVariant(db: Db, ids?: string[]): Promise<Map
       GROUP BY "variantId"
     ),
     inflow AS (
+      -- Only variants with stock on hand need an age: sold-out ones skip the
+      -- window sort entirely.
       SELECT "variantId", "createdAt", "quantity",
         SUM("quantity") OVER (
           PARTITION BY "variantId" ORDER BY "createdAt" DESC, "id" DESC
         ) AS cum
       FROM "StockMovement"
       WHERE "quantity" > 0 ${scope}
+        AND "variantId" IN (SELECT "variantId" FROM bal WHERE stock > 0)
     )
     SELECT i."variantId", MIN(i."createdAt") AS oldest
     FROM inflow i

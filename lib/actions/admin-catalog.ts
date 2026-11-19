@@ -57,9 +57,19 @@ export async function saveProduct(input: ProductInputT): Promise<ActionResult<{ 
         ? await tx.product.update({ where: { id: p.id }, data })
         : await tx.product.create({ data });
 
+      // Every existing variant in one read, not one per variant.
+      const existingIds = p.variants.map(v => v.id).filter(Boolean) as string[];
+      const existing = new Map(
+        (
+          await tx.productVariant.findMany({
+            where: { id: { in: existingIds } },
+            select: { id: true, productId: true, priceCentavos: true },
+          })
+        ).map(v => [v.id, v])
+      );
       for (const v of p.variants) {
         if (v.id) {
-          const current = await tx.productVariant.findUnique({ where: { id: v.id } });
+          const current = existing.get(v.id);
           if (!current || current.productId !== product.id) throw new UserError("A variant no longer exists.");
           await tx.productVariant.update({
             where: { id: v.id },
@@ -123,15 +133,20 @@ export async function savePrices(
       });
       const was = new Map(current.map(c => [c.id, c.priceCentavos]));
       const out: { variantId: string; from: number; to: number }[] = [];
-      const now = new Date();
       for (const c of parsed.data) {
         const from = was.get(c.variantId);
         if (from === undefined || from === c.price) continue;
-        await tx.productVariant.update({
-          where: { id: c.variantId },
-          data: { priceCentavos: c.price, priceUpdatedAt: now },
-        });
         out.push({ variantId: c.variantId, from, to: c.price });
+      }
+      if (out.length) {
+        // Every changed price in one statement (Int centavos throughout).
+        const ids = out.map(c => c.variantId);
+        const prices = out.map(c => c.to);
+        await tx.$executeRaw`
+          UPDATE "ProductVariant" AS pv
+          SET "priceCentavos" = v.price, "priceUpdatedAt" = NOW(), "updatedAt" = NOW()
+          FROM unnest(${ids}::text[], ${prices}::int[]) AS v(id, price)
+          WHERE pv."id" = v.id`;
       }
       return out;
     });

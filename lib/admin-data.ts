@@ -5,8 +5,8 @@ import prisma from "@/lib/prisma";
 import { ageInDays } from "@/lib/ledger";
 import { oldestInflowByVariant, stockByVariant } from "@/lib/stock-sql";
 import { imageForName } from "@/lib/catalog-data";
-import { LOW_STOCK_AT, orderCode, stockState, TO_SALE_AFTER_DAYS, type OrderStatusKey } from "@/lib/meta";
-import { DAY_MS, daysAgo, startOfShopDay } from "@/lib/time";
+import { LOW_STOCK_AT, orderCode, stockState, TO_SALE_AFTER_DAYS, tripCode, type OrderStatusKey } from "@/lib/meta";
+import { DAY_MS, dayKey, daysAgo, startOfShopDay } from "@/lib/time";
 
 // ── Inventory ────────────────────────────────────────────────────────────────
 
@@ -113,13 +113,24 @@ export type SellableVariant = ReturnType<typeof sellable>[number];
 
 // ── Counts for the rail / inbox ─────────────────────────────────────────────
 
-export type AdminCounts = { pending: number; out: number; low: number; toSale: number };
+export type AdminCounts = { pending: number; out: number; low: number; toSale: number; dispatch: number };
 
 async function countsWith(load: () => Promise<InvProduct[]>): Promise<AdminCounts> {
-  const [inv, pending] = await Promise.all([load(), prisma.order.count({ where: { status: "PENDING" } })]);
+  const [inv, [c]] = await Promise.all([
+    load(),
+    // Three badge counts in one round trip.
+    prisma.$queryRaw<{ pending: bigint; unplanned: bigint; cash: bigint }[]>`
+      SELECT
+        (SELECT COUNT(*) FROM "Order" WHERE "status" = 'PENDING') AS pending,
+        (SELECT COUNT(*) FROM "Order" WHERE "status" = 'PACKED' AND "tripId" IS NULL) AS unplanned,
+        (SELECT COUNT(*) FROM "Trip" WHERE "status" = 'RETURNED') AS cash
+    `,
+  ]);
   const vs = sellable(inv);
   return {
-    pending,
+    pending: Number(c.pending),
+    // Dispatch badge: packed orders with no trip, plus trips whose cash is unconfirmed.
+    dispatch: Number(c.unplanned) + Number(c.cash),
     out: vs.filter(v => v.stock <= 0).length,
     low: vs.filter(v => stockState(v.stock) === "low").length,
     toSale: vs.filter(v => v.toSale).length,
@@ -135,16 +146,20 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
   const today = startOfShopDay();
   const weekStart = daysAgo(6);
   const open = { status: { not: "CANCELLED" as const } };
-  const [todayAgg, weekOrders, sellerRows, pendingCount, pendingOrders, inv] = await Promise.all([
+  const [todayAgg, weekOrders, sellerRows, pipeline, pendingOrders, inv, noPin, cashTrips, unplanned] = await Promise.all([
     prisma.order.aggregate({
       where: { createdAt: { gte: today }, ...open },
       _count: { _all: true },
       _sum: { totalCentavos: true },
     }),
-    prisma.order.findMany({
-      where: { createdAt: { gte: weekStart }, ...open },
-      select: { createdAt: true, totalCentavos: true },
-    }),
+    // Orders and sales per shop day, bucketed in SQL (day 0 = weekStart).
+    prisma.$queryRaw<{ idx: number; orders: bigint; revenue: bigint }[]>`
+      SELECT FLOOR(EXTRACT(EPOCH FROM ("createdAt" - ${weekStart}::timestamp)) / 86400)::int AS idx,
+        COUNT(*)::bigint AS orders, COALESCE(SUM("totalCentavos"), 0)::bigint AS revenue
+      FROM "Order"
+      WHERE "createdAt" >= ${weekStart} AND "status" <> 'CANCELLED'
+      GROUP BY idx
+    `,
     prisma.$queryRaw<{ name: string; qty: bigint; revenue: bigint }[]>`
       SELECT p."name", SUM(oi."quantity")::bigint AS qty, SUM(oi."quantity" * oi."priceAtTime")::bigint AS revenue
       FROM "OrderItem" oi
@@ -156,8 +171,9 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
       ORDER BY revenue DESC
       LIMIT 5
     `,
-    prisma.order.count({ where: { status: "PENDING" } }),
+    orderCounts(),
     prisma.order.findMany({
+      ...JOIN,
       where: { status: "PENDING" },
       orderBy: { createdAt: "asc" },
       take: 8,
@@ -166,24 +182,52 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
         orderNumber: true,
         deliveryName: true,
         deliverySlot: true,
+        deliveryDate: true,
+        deliveryBarangay: true,
+        paymentMethod: true,
         totalCentavos: true,
         createdAt: true,
         customer: { select: { name: true } },
-        items: { select: { quantity: true } },
+        // Names too, so Confirm on Today can print the bag label.
+        items: { orderBy: { id: "asc" }, select: { quantity: true, variant: { select: { name: true, product: { select: { name: true } } } } } },
       },
     }),
     load(),
+    // Deliveries finished without the customer's PIN in the last 3 days.
+    prisma.orderStatusEvent.findMany({
+      ...JOIN,
+      where: { toStatus: "COMPLETED", createdAt: { gte: daysAgo(2) }, OR: [{ note: { startsWith: "No PIN" } }, { note: { startsWith: "Office:" } }] },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      select: { id: true, note: true, createdAt: true, actor: { select: { name: true } }, order: { select: { orderNumber: true, deliveryName: true } } },
+    }),
+    prisma.trip.findMany({
+      ...JOIN,
+      where: { status: "RETURNED" },
+      orderBy: { returnedAt: "asc" },
+      take: 8,
+      select: {
+        id: true,
+        tripNumber: true,
+        slot: true,
+        vehicle: true,
+        returnedAt: true,
+        driver: { select: { name: true } },
+        orders: { where: { status: "COMPLETED", paymentMethod: "COD" }, select: { totalCentavos: true } },
+      },
+    }),
+    prisma.order.count({ where: { status: "PACKED", tripId: null } }),
   ]);
+  const pendingCount = pipeline.PENDING;
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const start = new Date(weekStart.getTime() + i * DAY_MS);
     return { start, revenue: 0, orders: 0 };
   });
-  for (const o of weekOrders) {
-    const idx = Math.floor((o.createdAt.getTime() - weekStart.getTime()) / DAY_MS);
-    if (days[idx]) {
-      days[idx].revenue += o.totalCentavos;
-      days[idx].orders += 1;
+  for (const b of weekOrders) {
+    if (days[b.idx]) {
+      days[b.idx].revenue += Number(b.revenue);
+      days[b.idx].orders += Number(b.orders);
     }
   }
 
@@ -194,6 +238,8 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
     days,
     topSellers: sellerRows.map(r => ({ name: r.name, qty: Number(r.qty), revenue: Number(r.revenue) })),
     pendingCount,
+    pipeline,
+    packedNoTrip: unplanned,
     pendingOrders: pendingOrders.map(o => ({
       id: o.id,
       code: orderCode(o.orderNumber),
@@ -202,6 +248,36 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
       items: o.items.reduce((s, i) => s + i.quantity, 0),
       createdAt: o.createdAt,
       slot: o.deliverySlot,
+      // Bag label fields (no phone or address).
+      label: {
+        code: orderCode(o.orderNumber),
+        createdAt: o.createdAt.toISOString(),
+        delivery: {
+          name: o.deliveryName || o.customer.name || "Customer",
+          barangay: o.deliveryBarangay,
+          slot: o.deliverySlot,
+          day: o.deliveryDate ? dayKey(o.deliveryDate) : null,
+        },
+        payment: o.paymentMethod,
+        total: o.totalCentavos,
+        items: o.items.map(i => ({ name: i.variant.product.name, variant: i.variant.name, qty: i.quantity })),
+      },
+    })),
+    noPinDeliveries: noPin.map(e => ({
+      id: e.id,
+      code: orderCode(e.order.orderNumber),
+      customer: e.order.deliveryName,
+      note: e.note ?? "",
+      by: e.actor?.name ?? "Staff",
+      at: e.createdAt,
+    })),
+    cashToConfirm: cashTrips.map(t => ({
+      id: t.id,
+      code: tripCode(t.tripNumber),
+      label: `${t.vehicle} · ${t.slot}`,
+      driver: t.driver?.name ?? "Driver",
+      expected: t.orders.reduce((s, o) => s + o.totalCentavos, 0),
+      returnedAt: t.returnedAt,
     })),
     outOfStock: vs.filter(v => v.stock <= 0),
     lowStock: vs.filter(v => v.stock > 0 && v.stock <= LOW_STOCK_AT).sort((a, b) => a.stock - b.stock),
@@ -211,50 +287,73 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
-const orderInclude = {
+/** Nested reads in one SQL statement (Prisma `relationJoins` preview). */
+const JOIN = { relationLoadStrategy: "join" } as const;
+
+/**
+ * What the Orders list, the drawer's first paint and the bag label need. No
+ * phone, address or timeline: those load when an order is opened
+ * (`getOrderDetail`), so a tab switch stays one small query.
+ */
+const orderListSelect = {
+  id: true,
+  orderNumber: true,
+  status: true,
+  createdAt: true,
+  deliveryName: true,
+  deliveryBarangay: true,
+  deliverySlot: true,
+  deliveryDate: true,
+  paymentMethod: true,
+  deliveryFeeCentavos: true,
+  totalCentavos: true,
+  stopIndex: true,
+  loadedAt: true,
   customer: { select: { name: true, email: true } },
-  items: { include: { variant: { include: { product: { select: { name: true, imageUrl: true } } } } } },
-  statusEvents: {
-    orderBy: { createdAt: "asc" as const },
-    include: { actor: { select: { name: true, role: true } } },
+  trip: { select: { tripNumber: true, vehicle: true, status: true, driver: { select: { name: true } } } },
+  items: {
+    orderBy: { id: "asc" },
+    select: {
+      quantity: true,
+      priceAtTime: true,
+      variant: { select: { name: true, product: { select: { name: true } } } },
+    },
   },
-} satisfies Prisma.OrderInclude;
+} satisfies Prisma.OrderSelect;
 
-type OrderRow = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
+type OrderListRow = Prisma.OrderGetPayload<{ select: typeof orderListSelect }>;
 
-function shapeAdminOrder(o: OrderRow) {
+function shapeAdminOrder(o: OrderListRow) {
   return {
     id: o.id,
     code: orderCode(o.orderNumber),
     status: o.status as OrderStatusKey,
     createdAt: o.createdAt.toISOString(),
     customer: o.customer.name ?? o.customer.email,
-    email: o.customer.email,
     delivery: {
       name: o.deliveryName,
-      phone: o.deliveryPhone,
-      address: o.deliveryAddress,
       barangay: o.deliveryBarangay,
       slot: o.deliverySlot,
+      day: o.deliveryDate ? dayKey(o.deliveryDate) : null,
     },
+    trip: o.trip
+      ? {
+          code: tripCode(o.trip.tripNumber),
+          vehicle: o.trip.vehicle,
+          driver: o.trip.driver?.name ?? null,
+          stop: o.stopIndex,
+          loaded: !!o.loadedAt,
+          leftStall: o.trip.status !== "PLANNED",
+        }
+      : null,
     payment: o.paymentMethod,
     fee: o.deliveryFeeCentavos,
     total: o.totalCentavos,
     items: o.items.map(i => ({
       name: i.variant.product.name,
       variant: i.variant.name,
-      sku: i.variant.sku,
       qty: i.quantity,
       price: i.priceAtTime,
-      image: i.variant.product.imageUrl ?? imageForName(i.variant.product.name),
-    })),
-    events: o.statusEvents.map(e => ({
-      id: e.id,
-      from: e.fromStatus as OrderStatusKey | null,
-      to: e.toStatus as OrderStatusKey,
-      at: e.createdAt.toISOString(),
-      note: e.note,
-      actor: e.actor ? (e.actor.role === "ADMIN" ? e.actor.name ?? "Staff" : "Customer") : "System",
     })),
   };
 }
@@ -263,23 +362,63 @@ export type AdminOrder = ReturnType<typeof shapeAdminOrder>;
 
 export async function listOrders(status: OrderStatusKey | "ALL"): Promise<AdminOrder[]> {
   const rows = await prisma.order.findMany({
+    ...JOIN,
     where: status === "ALL" ? {} : { status },
     orderBy: [{ createdAt: "desc" }],
     take: 200,
-    include: orderInclude,
+    select: orderListSelect,
   });
   return rows.map(shapeAdminOrder);
 }
 
 /** One order by its number (for `?open=HB-0005` links into another tab). */
 export async function getAdminOrder(orderNumber: number): Promise<AdminOrder | null> {
-  const row = await prisma.order.findUnique({ where: { orderNumber }, include: orderInclude });
+  const row = await prisma.order.findUnique({ ...JOIN, where: { orderNumber }, select: orderListSelect });
   return row ? shapeAdminOrder(row) : null;
 }
 
+/** The rest of an opened order: contact details, item photos and SKUs, timeline. */
+export async function getOrderDetail(id: string) {
+  const o = await prisma.order.findUnique({
+    ...JOIN,
+    where: { id },
+    select: {
+      deliveryPhone: true,
+      deliveryAddress: true,
+      customer: { select: { email: true } },
+      items: { orderBy: { id: "asc" }, select: { variant: { select: { sku: true, product: { select: { name: true, imageUrl: true } } } } } },
+      statusEvents: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, fromStatus: true, toStatus: true, createdAt: true, note: true, actor: { select: { name: true, role: true } } },
+      },
+    },
+  });
+  if (!o) return null;
+  return {
+    phone: o.deliveryPhone,
+    address: o.deliveryAddress,
+    email: o.customer.email,
+    // Same order as the list's items (both sorted by id).
+    items: o.items.map(i => ({
+      sku: i.variant.sku,
+      image: i.variant.product.imageUrl ?? imageForName(i.variant.product.name),
+    })),
+    events: o.statusEvents.map(e => ({
+      id: e.id,
+      from: e.fromStatus as OrderStatusKey | null,
+      to: e.toStatus as OrderStatusKey,
+      at: e.createdAt.toISOString(),
+      note: e.note,
+      actor: e.actor ? (e.actor.role === "CUSTOMER" ? "Customer" : e.actor.name ?? "Staff") : "System",
+    })),
+  };
+}
+
+export type OrderDetail = NonNullable<Awaited<ReturnType<typeof getOrderDetail>>>;
+
 export async function orderCounts(): Promise<Record<OrderStatusKey | "ALL", number>> {
   const groups = await prisma.order.groupBy({ by: ["status"], _count: { _all: true } });
-  const out = { ALL: 0, PENDING: 0, CONFIRMED: 0, READY: 0, COMPLETED: 0, CANCELLED: 0 };
+  const out = { ALL: 0, PENDING: 0, CONFIRMED: 0, PACKED: 0, READY: 0, COMPLETED: 0, CANCELLED: 0 };
   for (const g of groups) {
     out[g.status as OrderStatusKey] = g._count._all;
     out.ALL += g._count._all;
@@ -318,17 +457,19 @@ function kindOf(reason: string, qty: number): LedgerRow["kind"] {
 export const LEDGER_LIMIT = 300;
 
 /**
- * Newest-first ledger rows with each variant's running balance. The balance
- * is a window sum over that variant's full history (inner query), and the
- * period filter and row limit apply afterwards, so balances stay exact.
+ * Newest-first ledger rows with each variant's running balance. A row's
+ * balance is the variant's current stock minus every movement after it, and
+ * every movement after a row in the period is itself in the period, so the
+ * window only runs over the period's rows (not the whole ledger) and the
+ * balances stay exact.
  */
 export async function loadLedger(opts: {
   variantId?: string;
   sinceDays?: number;
 }): Promise<{ rows: LedgerRow[]; truncated: boolean }> {
   const since = opts.sinceDays !== undefined ? daysAgo(opts.sinceDays) : undefined;
-  const scope = opts.variantId ? Prisma.sql`WHERE sm."variantId" = ${opts.variantId}` : Prisma.empty;
-  const period = since ? Prisma.sql`WHERE m."createdAt" >= ${since}` : Prisma.empty;
+  const scope = opts.variantId ? Prisma.sql`AND sm."variantId" = ${opts.variantId}` : Prisma.empty;
+  const period = since ? Prisma.sql`AND sm."createdAt" >= ${since}` : Prisma.empty;
   const raw = await prisma.$queryRaw<
     {
       id: string;
@@ -345,18 +486,29 @@ export async function loadLedger(opts: {
       actorName: string | null;
     }[]
   >`
-    SELECT m."id", m."variantId", m."quantity", m."reason", m."orderId", m."createdAt", m.balance::int AS balance,
-      v."name" AS "variantName", v."sku", p."name" AS "productName", o."orderNumber", a."name" AS "actorName"
-    FROM (
-      SELECT sm.*, SUM(sm."quantity") OVER (PARTITION BY sm."variantId" ORDER BY sm."createdAt", sm."id") AS balance
+    WITH m AS (
+      SELECT sm.*,
+        COALESCE(SUM(sm."quantity") OVER (
+          PARTITION BY sm."variantId" ORDER BY sm."createdAt" DESC, sm."id" DESC
+          ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+        ), 0) AS later
       FROM "StockMovement" sm
-      ${scope}
-    ) m
+      WHERE TRUE ${scope} ${period}
+    ),
+    s AS (
+      SELECT "variantId", SUM("quantity") AS stock
+      FROM "StockMovement"
+      WHERE "variantId" IN (SELECT DISTINCT "variantId" FROM m)
+      GROUP BY "variantId"
+    )
+    SELECT m."id", m."variantId", m."quantity", m."reason", m."orderId", m."createdAt", (s.stock - m.later)::int AS balance,
+      v."name" AS "variantName", v."sku", p."name" AS "productName", o."orderNumber", a."name" AS "actorName"
+    FROM m
+    JOIN s ON s."variantId" = m."variantId"
     JOIN "ProductVariant" v ON v."id" = m."variantId"
     JOIN "Product" p ON p."id" = v."productId"
     LEFT JOIN "Order" o ON o."id" = m."orderId"
     LEFT JOIN "User" a ON a."id" = m."actorId"
-    ${period}
     ORDER BY m."createdAt" DESC, m."id" DESC
     LIMIT ${LEDGER_LIMIT + 1}
   `;

@@ -2,6 +2,7 @@
 
 import { getUser } from "@/lib/session";
 import { parseOrderCode } from "@/lib/meta";
+import { dayKey } from "@/lib/time";
 import { cancelOrderTx, createOrderTx, PlaceOrderSchema, type PlaceOrderData } from "@/lib/orders-core";
 import { dbError, fail, ok, invalidate, serializable, UserError, type ActionResult } from "./util";
 
@@ -15,7 +16,9 @@ export type PlaceOrderInput = PlaceOrderData & { saveDetails?: boolean };
  * the delivery details also go on the account, in that same transaction, so a
  * failed order never changes what's saved.
  */
-export async function placeOrder(input: PlaceOrderInput): Promise<ActionResult<{ code: string; total: number }>> {
+export async function placeOrder(
+  input: PlaceOrderInput
+): Promise<ActionResult<{ code: string; total: number; deliveryDay: string }>> {
   const user = await getUser();
   if (!user) return fail("Please sign in to place your order.");
 
@@ -23,7 +26,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<ActionResult<{
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Check your order details.");
 
   try {
-    const { code, total } = await serializable(async tx => {
+    const { code, total, deliveryDate } = await serializable(async tx => {
       const placed = await createOrderTx(tx, user.id, parsed.data);
       if (input.saveDetails === true) {
         const { phone, address, barangay } = parsed.data.delivery;
@@ -32,7 +35,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<ActionResult<{
       return placed;
     });
     invalidate("shop", "orders", "admin");
-    return ok({ code, total });
+    return ok({ code, total, deliveryDay: dayKey(deliveryDate) });
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);
     return dbError(err);
@@ -41,9 +44,9 @@ export async function placeOrder(input: PlaceOrderInput): Promise<ActionResult<{
 
 /**
  * Customer-facing cancellation:
- * Allowed for the signed-in owner (or staff) while the order is not yet in
- * delivery (PENDING or CONFIRMED). Writes compensating stock movements to
- * return held inventory into the ledger.
+ * Allowed for the signed-in owner (or an admin) until the order is on the
+ * truck (PENDING, CONFIRMED or PACKED). Writes compensating stock movements to
+ * return held inventory into the ledger, and takes it off any planned trip.
  */
 export async function cancelCustomerOrder(orderCodeInput: string, reason?: string): Promise<ActionResult> {
   const user = await getUser();
@@ -67,7 +70,7 @@ export async function cancelCustomerOrder(orderCodeInput: string, reason?: strin
       }
 
       if (order.status === "READY" || order.status === "COMPLETED") {
-        throw new UserError("This order is already out for delivery or completed and cannot be cancelled.");
+        throw new UserError("This order is already on the truck or delivered, so it can't be cancelled.");
       }
       if (order.status === "CANCELLED") {
         throw new UserError("This order is already cancelled.");
@@ -76,7 +79,7 @@ export async function cancelCustomerOrder(orderCodeInput: string, reason?: strin
       await cancelOrderTx(tx, order, user.id, note, "Cancelled by customer");
     });
 
-    invalidate("shop", "orders", "admin");
+    invalidate("shop", "orders", "admin", "staff");
     return ok(null);
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);

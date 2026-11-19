@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronRight, LogOut } from "lucide-react";
+import { ChevronRight, KeyRound, LogOut } from "lucide-react";
 import { getDeliveryProfile } from "@/lib/account";
 import { listMyOrders } from "@/lib/orders";
 import { requireUser } from "@/lib/session";
 import { logoutAction } from "@/lib/actions/auth";
 import { splitName } from "@/lib/meta";
 import { peso } from "@/lib/money";
-import { fmtDateTime } from "@/lib/time";
+import { fmtDateTime, fmtDay } from "@/lib/time";
 import { Button, ButtonLink, StatusChip } from "@/components/ui/primitives";
 import { DeliveryDetailsCard } from "@/components/shop/DeliveryDetailsCard";
 
@@ -71,12 +71,21 @@ export default async function AccountPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-bold text-ink">{o.code}</span>
-                      <StatusChip status={o.status} />
+                      <StatusChip status={o.status} forCustomer />
                     </div>
                     <p className="mt-1 truncate text-sm text-ink-2">
                       {o.items.map(i => `${i.qty}× ${splitName(i.name).local}`).join(", ")}
                     </p>
-                    <p className="text-[13px] text-ink-3">{fmtDateTime(o.createdAt)}</p>
+                    <p className="text-[13px] text-ink-3">
+                      Placed {fmtDateTime(o.createdAt)}
+                      {o.day && o.status !== "CANCELLED" ? ` · delivery ${fmtDay(o.day)}, ${o.slot}` : ""}
+                    </p>
+                    {o.pin && (
+                      <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-tarp-soft px-2 py-0.5 text-[13px] font-semibold text-[#5c4300] ring-1 ring-inset ring-tarp-deep/40">
+                        <KeyRound className="size-3.5" aria-hidden /> Handoff PIN{" "}
+                        <span className="tabular font-bold tracking-[0.15em] text-ink">{o.pin}</span>
+                      </p>
+                    )}
                   </div>
                   <span className="tabular font-bold text-ink">{peso(o.total)}</span>
                   <ChevronRight className="size-5 text-ink-3 transition-transform group-hover:translate-x-0.5" aria-hidden />

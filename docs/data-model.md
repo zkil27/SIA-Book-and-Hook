@@ -10,11 +10,13 @@ by hand in the same commit as any schema change.
 
 ---
 
-## The eight entities
+## The nine entities
 
 ### User
-A person with an account. The `role` field is an enum — `ADMIN` or `CUSTOMER` —
-and it is the only thing separating a staff member from a shopper. Passwords are
+A person with an account. The `role` field is an enum — `ADMIN`, `PACKER`,
+`DRIVER` or `CUSTOMER` — and it is the only thing separating staff from a
+shopper, and one staff job from another: packers and drivers get their own
+phone screens under `/staff` and cannot open the admin (`lib/roles.ts`). Passwords are
 stored hashed, never in plain text. `phone`, `address` and `barangay` are the
 customer's saved delivery details: optional, one set per account, used to prefill
 checkout and editable on `/account`.
@@ -60,9 +62,35 @@ An order also stores:
   `deliveryBarangay`, `deliverySlot`.
 - `deliveryFeeCentavos` — the fee charged (₱50, or ₱0 when items reach ₱500).
   `totalCentavos` = items at `priceAtTime` + this fee.
+- `deliveryDate` — the Manila calendar day of the slot (a `DATE`). Set at
+  checkout: ordered before 9 PM → next morning, otherwise the day after, and
+  never a Sunday. Each slot takes at most `SLOT_CAPACITY` (12) non-cancelled
+  orders a day: one truck run.
+- `tripId`, `stopIndex`, `loadedAt` — the delivery trip carrying it, its stop
+  number on that trip's route, and when it was ticked onto the truck.
+- `handoffPin` — 4 random digits shown **only** to the customer (on `/track`
+  and `/account` while the order is packed or on the truck). The driver types
+  it at the door to finish the stop. Staff screens never read it out.
+- `pinAttempts` — wrong PIN entries. At 5 the PIN locks and the driver must
+  finish with a logged reason instead.
 
-Statuses run `PENDING → CONFIRMED → READY (out for delivery) → COMPLETED`, or
-`CANCELLED` from any open status.
+Statuses run `PENDING → CONFIRMED → PACKED → READY (on the truck) → COMPLETED`,
+or `CANCELLED` from any status before `READY`. The office advances only the
+first two steps; `PACKED → READY` happens when the driver starts the trip, and
+`READY → COMPLETED` at the door (PIN or logged reason) or by an office override
+with a written reason.
+
+### Trip
+One delivery run on the store's own vehicle: a delivery day, a slot, a vehicle
+label ("Truck 1", a label only, no fleet records), a driver, and its orders as
+numbered stops. `tripNumber` is shown as **T-012**. Status runs
+`PLANNED` (drafted, being loaded) → `OUT` (left the stall) → `RETURNED` (back,
+cash not yet counted) → `REMITTED` (the office confirmed the cash). The remit
+fields record the cash-on-delivery money the driver handed in
+(`cashRemittedCentavos`), who counted it and a note when it differs from the
+expected total. That is a handover record between staff, not payment
+processing. A planned trip that never left may be scrapped (deleted); a trip
+that left stays as part of the delivery record.
 
 ### OrderItem
 One line on an order: which variant, how many, and the price **at the time of
@@ -88,8 +116,9 @@ difference) and undos/corrections ("Undo of MV-…", "Correction of MV-…").
 
 ### OrderStatusEvent
 The order's timeline: one row per status change, with `fromStatus`, `toStatus`,
-an optional `note` (e.g. the cancellation reason) and who made the change
-(`actorId`). Like the stock ledger it is **append-only** — undoing a status
+an optional `note` (e.g. the cancellation reason, `On the truck · T-012 stop 3
+of 7`, `PIN verified · COD ₱540 collected`, `No PIN: … · received by …`,
+`Office: …`) and who made the change (`actorId`). Like the stock ledger it is **append-only** — undoing a status
 change writes a new event with the note "Undo", it never rewrites history.
 `npm run footguns` fails the build if code updates or deletes either table.
 
@@ -108,6 +137,9 @@ Order     1 ──< many  StockMovement   (optional — a movement may have no o
 Order     1 ──< many  OrderStatusEvent
 User      1 ──< many  StockMovement      (optional — the staff member who recorded it)
 User      1 ──< many  OrderStatusEvent   (optional — who changed the status)
+Trip      1 ──< many  Order              (optional — the trip carrying it)
+User      1 ──< many  Trip               (optional — the driver)
+User      1 ──< many  Trip               (optional — who confirmed the cash)
 ```
 
 The diagram source is `docs/diagrams/erd.mmd` (Mermaid), derived from
@@ -142,14 +174,25 @@ them either. Beyond the unique keys, the schema indexes:
 |---|---|---|
 | StockMovement | `(variantId, createdAt)` | A variant's history, stock sums, ledger filter |
 | StockMovement | `(orderId)` | An order's movements (cancelling returns exactly what it holds) |
+| StockMovement | `(variantId, quantity)` | Covering index: stock = `SUM(quantity)` per variant read from the index alone (2026-11-07) |
 | Order | `(status, createdAt)` | Admin order tabs, pending counts, dashboard date ranges |
 | Order | `(customerId, createdAt)` | A customer's order history |
+| Order | `(createdAt)` | The "All" orders tab and week totals across every status (2026-11-07) |
 | OrderItem | `(orderId)`, `(variantId)` | Loading an order's lines; top sellers |
 | OrderStatusEvent | `(orderId, createdAt)` | An order's timeline |
+| OrderStatusEvent | `(toStatus, createdAt)` | Dashboard "delivered without a PIN" (2026-11-07) |
+| Order | `(deliveryDate, deliverySlot, status)` | Slot capacity at checkout, dispatch drafting |
+| Order | `(tripId, stopIndex)` | A trip's stops in route order |
+| Trip | `(date, slot)`, `(driverId, date)`, `(status)` | Dispatch board, a driver's trips, trips awaiting cash |
 | Product | `(categoryId)` | Catalog by category |
 | ProductVariant | `(productId)` | A product's variants |
 
-Indexes don't change the entities or relations, so the ERD is unchanged.
+Indexes don't change the entities or relations. (The ERD changed on 2026-11-08 for `Trip`, not for these; the 2026-11-07 speed-pass indexes in migration `20261109000000_perf_indexes` don't change it either, so `docs/diagrams/` needs no regeneration.)
+
+The Prisma client also enables the `relationJoins` preview feature (schema
+`generator` block). It changes how nested reads are executed (one SQL
+statement with lateral joins when a query passes
+`relationLoadStrategy: "join"`), not the data model.
 
 ---
 

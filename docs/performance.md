@@ -82,8 +82,48 @@ data access.
 - **A stored stock column.** Faster reads, but every write path would have to
   keep it in sync and it could drift from the ledger. SQL aggregation is fast
   at this data size.
-- **Prisma `relationJoins` preview** and a `LazyMotion` refactor: small gains
-  for preview-feature or many-file risk.
+- ~~**Prisma `relationJoins` preview**~~: adopted in speed pass 2 (below),
+  once the staff and trip reads made nested includes the biggest cost.
+- A `LazyMotion` refactor: a small bundle gain for many-file risk.
+
+## Speed pass 2 (2026-11-07)
+
+Still slow locally and deployed after the trips/staff work landed. The auth
+path was clean (the proxy only matches `/admin` and `/staff`; the JWT
+callbacks make no database calls). What cost time:
+
+| # | Cause | Where | Fix |
+|---|---|---|---|
+| 1 | Prisma 5 ran **one query per relation level, in sequence**: an Orders tab ≈ 9 queries, a trip ≈ 8, an order lookup ≈ 7. | `orderInclude`, `tripInclude`, `packSelect`, `findRow` | `relationJoins` preview + `relationLoadStrategy: "join"` on every hot nested read: one statement each. |
+| 2 | Staff screens **rendered twice per action**: the action's revalidation plus a client `router.refresh()` (and a 1.1 s wait on the driver screen). | `LoadList`, `PickList`, `TripRun` | Refresh only on errors. |
+| 3 | Every packer/driver action **re-rendered the admin layout** (`invalidate("admin")`). | `lib/actions/trips.ts` | Staff actions refresh `staff` + `orders`; only dispatch actions touch `admin`. |
+| 4 | **Row-by-row writes inside serializable transactions**: start trip 2N+5 round trips, draft/renumber N, bulk confirm 2N, prices N, product save N. | trips, admin-orders, admin-catalog actions | `UPDATE … FROM unnest(…)`, `updateMany` + `createMany`, `UPDATE … RETURNING`. Single-order advance and `setLoaded` use a guarded `updateMany` (no read, no serializable). |
+| 5 | The **Orders list loaded every order's whole timeline, phone and address**, and opening an order re-rendered the page on the server (≈ 19–28 queries). | `listOrders`, `OrdersBoard` | Slim list select; the drawer opens instantly from list data, the URL updates with `history.replaceState`, and phone/address/timeline load via `orderDetail`. |
+| 6 | Orders board **re-rendered every row on hover and keystroke**; 200 rows with `layout` animation. | `OrdersBoard` | Memoised rows, CSS hover, `useDeferredValue` search, one keydown subscription (`useEffectEvent`), no row layout animation. |
+| 7 | **Place order** waited for `/checkout` to re-render, and the checkout page read the whole catalog just for an "offline" flag. | `invalidate("shop")`, checkout page | Don't revalidate `/checkout`; derive offline from the page's own reads. |
+| 8 | Sequential or unbounded staff reads. | `dispatchBoard`, `tripsToLoad`, `openTripsFor`, pack page | groupBy into the `Promise.all`, date bounds + `take`, a count/light list instead of 200 full orders. |
+| 9 | Ledger running balance windowed over the **whole** table even for "Today"; FIFO age sorted sold-out variants too. | `loadLedger`, `oldestInflowByVariant` | Balance = current stock − later movements, over the period only; FIFO only for variants in stock. |
+| 10 | Badge counts were 3 queries; the dashboard bucketed a week of orders in JS. | `countsWith`, `getDashboard` | One SQL statement; `GROUP BY` day in SQL. |
+| 11 | Revisiting a tab always refetched (`staleTimes.dynamic` 0). | `next.config.ts` | `experimental.staleTimes.dynamic = 30`; writes still clear it. |
+| 12 | Stock sums read every ledger row from the table. | schema | Covering index `StockMovement(variantId, quantity)`, plus `Order(createdAt)`, `OrderStatusEvent(toStatus, createdAt)` (migration `20261109000000_perf_indexes`). |
+
+**Expected statement counts** (from the code, not yet measured; fill in with
+`PRISMA_LOG=query`): Orders tab switch ≈ 10 → 2; opening an order ≈ 19 → 1
+(a server action, no page render); ticking a bag ≈ 5 + 2 renders × 8 → 1 + 1
+render × 1; starting a 10-stop trip ≈ 25 → 6; bulk-confirming 10 orders ≈ 22
+→ 3.
+
+**Deploy:** `npx prisma migrate deploy`, then `connection_limit=3` on
+Vercel's `DATABASE_URL` (`docs/deployment.md`).
+
+**Local `npm run dev` will always feel slower:** each query crosses from
+your machine to Singapore (≈ 40–60 ms), and each route compiles on first
+visit. Judge speed on the deployed site or with `npm run build; npm run start`.
+
+**Still not done (follow-ups):** client-side filtering on the storefront home
+(each filter chip is a server round trip), server-rendered product cards,
+a `LazyMotion` bundle trim, `prefetch={false}` on the price crawl's links,
+and a cross-request catalog cache.
 
 ## Measurements
 

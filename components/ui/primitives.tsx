@@ -118,6 +118,7 @@ export function Select(props: ComponentProps<"select">) {
 const TONE: Record<string, string> = {
   yellow: "bg-tarp-soft text-[#6b4e00] ring-tarp-deep/40",
   teal: "bg-mint-soft text-teal-ink ring-teal/40",
+  cardboard: "bg-cardboard-light text-[#5a3d14] ring-cardboard-edge/50",
   violet: "bg-violet-soft text-[#3b2a78] ring-violet/30",
   green: "bg-leaf-soft text-[#14532f] ring-leaf/30",
   gray: "bg-ice-2 text-ink-2 ring-ice-3",
@@ -142,12 +143,13 @@ export function Chip({
   );
 }
 
-export function StatusChip({ status }: { status: OrderStatusKey }) {
+/** Staff see the job waiting on the order ("To pack"); customers see its state ("Confirmed"). */
+export function StatusChip({ status, forCustomer = false }: { status: OrderStatusKey; forCustomer?: boolean }) {
   const meta = STATUS_META[status];
   return (
     <Chip tone={meta.tone}>
       <span className="size-1.5 rounded-full bg-current opacity-70" aria-hidden />
-      {meta.label}
+      {forCustomer ? meta.shopLabel : meta.label}
     </Chip>
   );
 }

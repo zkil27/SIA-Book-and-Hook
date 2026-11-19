@@ -1,6 +1,9 @@
 import "server-only";
 import { notFound } from "next/navigation";
 import { requireAdmin, type SessionUser } from "@/lib/session";
+import { isDevEmail } from "./emails";
+
+export { devEmails, isDevEmail } from "./emails";
 
 /**
  * Developer tools gate. The /admin/dev section is open only to signed-in
@@ -11,18 +14,6 @@ import { requireAdmin, type SessionUser } from "@/lib/session";
  * Checked in the dev layout AND at the start of every dev server action,
  * because server actions are callable directly, not only from the page.
  */
-
-export function devEmails(): string[] {
-  return (process.env.DEV_EMAILS ?? "")
-    .split(",")
-    .map(e => e.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-export function isDevEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return devEmails().includes(email.trim().toLowerCase());
-}
 
 export async function requireDev(): Promise<SessionUser> {
   const user = await requireAdmin();

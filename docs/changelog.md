@@ -5,6 +5,119 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-11-07 — "Staff screens" links only for developer accounts
+
+**What:** `components/admin/AdminShell.tsx`: the "Staff screens" group (Packing, Loading, Driver screen) in the admin sidebar and the phone "More" sheet now renders only when `isDev` (ADMIN + `DEV_EMAILS`), like the Dev tools link.
+
+**Why:** The links are for testing every role; regular admin accounts shouldn't see them.
+
+**Impact:** No access change: admins can still open `/staff/*` by URL (`lib/roles.ts`), and every staff page and action still checks the role. `docs/dev-tools.md` updated.
+
+## 2026-11-07 — Speed pass 2, bag labels on confirm, zero-training staff screens, dev account switcher
+
+**What:**
+- **Speed** (full table in `docs/performance.md` § Speed pass 2):
+  - `prisma/schema.prisma`: `relationJoins` preview. Hot nested reads in `lib/admin-data.ts`, `lib/trips-data.ts`, `lib/orders.ts` and `lib/catalog.ts` pass `relationLoadStrategy: "join"`.
+  - New index-only migration `20261109000000_perf_indexes`: `StockMovement(variantId, quantity)`, `Order(createdAt)`, `OrderStatusEvent(toStatus, createdAt)`.
+  - Batched writes:
+    - `lib/actions/trips.ts`: `setStopNumbers` via `unnest`; `startTrip` uses `updateMany` + `createMany`; `setLoaded` and `markPacked` are guarded single updates.
+    - `lib/actions/admin-orders.ts`: guarded `advanceOrder`, and `advanceOrders` uses `UPDATE … RETURNING` + `createMany`.
+    - `lib/actions/admin-catalog.ts`: one read of the variants in `saveProduct`; batched `savePrices`.
+  - Invalidation: staff actions refresh `staff` + `orders` only. The `shop` scope no longer revalidates `/checkout`. Staff components drop their success-path `router.refresh()` calls.
+  - Reads:
+    - The Orders list uses a slim select, and the drawer loads phone, address and timeline via the new `orderDetail` action.
+    - The `/admin/orders` default tab no longer runs a sequential second query.
+    - Badge counts take one SQL statement.
+    - Dashboard week buckets are computed in SQL.
+    - The ledger balance only covers the selected period, and FIFO age only covers variants in stock.
+    - Dispatch, loading and trip reads are bounded.
+    - The checkout page no longer reads the catalog.
+    - The product page fetches the product and its stock in parallel.
+  - `next.config.ts`: `experimental.staleTimes.dynamic = 30`.
+- **Bag labels:**
+  - `components/staff/BagLabel.tsx` (4×6 in thermal label) and `PrintLabels.tsx` (in-page print with `window.print()`, plus the "Print a bag label when confirming" per-device toggle).
+  - Print CSS: named page `bag-label` in `app/globals.css`.
+  - Confirm → **Confirm & print** on Orders rows, the drawer, Today and bulk ("Confirm N & print labels"). **Reprint label** is in the drawer and on the pick list.
+  - Labels never show the phone, address, stop number or PIN.
+- **Admin UI:**
+  - Status chips and tabs share one vocabulary (`lib/meta.ts`: To confirm → To pack → Packed → On the truck → Delivered; new `done` and `shopLabel` fields). Customer pages keep their own wording via `StatusChip forCustomer` and the receipt's `customer` text.
+  - The Orders tabs are drawn as a pipeline.
+  - Empty steps point to the next step with work.
+  - Packed rows get **Plan trip →**; on-truck rows show the trip and driver.
+  - Today gets an **order flow** strip with counts and who acts next.
+  - The sidebar gets a "Staff screens" group.
+  - Copy changes: "advance" → "next step"; Dispatch "Draft"/"Scrap" → "Plan"/"Delete plan"; trip chips "Being loaded" and "Back, count the cash".
+- **Packer UI** (`PackBoard.tsx`, `PickList.tsx`):
+  - One queue; "Today's pull" became the fold-out "What to take out for {day}", with plain `2 ×` quantities.
+  - A list of packed bags at the stall.
+  - Ticks persist per order.
+  - **Next order →** opens the next order directly (`markPacked` returns it).
+  - Plainer copy and 44 px toast Undo.
+- **Driver UI** (`TripRun.tsx`, `LoadList.tsx`, `StaffShell.tsx`, `PinPad.tsx`):
+  - Tabs follow the work: Load → Deliver. Drivers load only their own trips.
+  - The next stop is pinned on top; done stops fold away with readable notes.
+  - The handoff is now steps: cash first, then the PIN. This fixes the stuck cash-after-PIN bug. Tries left is always shown.
+  - The no-PIN path lists what's missing.
+  - "Couldn't deliver" is always a labelled full-width button.
+  - Start trip and Back at stall each ask for confirmation first.
+  - When the signal drops, the entries are kept and **Try again** is offered.
+  - PIN digits use bold sans.
+- **Dev account switcher:**
+  - `lib/actions/dev-switch.ts`, `lib/dev/switch-token.ts` (60 s HMAC ticket) and `lib/dev/emails.ts` (allowlist split out of `lib/dev/access.ts`).
+  - A second `dev-switch` Credentials provider in `auth.ts`. `devOrigin` is carried in the JWT/session (`auth.config.ts`, `lib/session.ts`, `types/next-auth.d.ts`).
+  - `components/dev/DevSwitcher.tsx` and `DevSwitcherGate.tsx`, mounted in the admin, staff and shop layouts.
+
+**Why:** The site felt slow both locally and deployed. The user also asked for staff screens that need no training, for confirming to print a label (Shopee-style "arrange shipment → print waybill"), and for a way to test every role from one computer without signing out and in.
+
+**Impact:**
+- Run `npx prisma migrate deploy` (the index migration), then `npx prisma generate`. Stop `npm run dev` first on Windows, or the engine file is locked. **Restart the dev server** to pick up the `relationJoins` client.
+- Add `connection_limit=3` to `DATABASE_URL` on Vercel.
+- The bag label and the dev switcher are recorded in `docs/scope.md` § 6 as *Pending team agreement*.
+- The dev switcher only appears when `DEV_EMAILS` is set (see `docs/dev-tools.md` and `docs/security.md`).
+- Statement counts are estimated from the code. Measure with `PRISMA_LOG=query` and the `/admin/dev/checks` probes, and record the results in `docs/performance.md`.
+- Docs updated: `performance.md`, `data-model.md`, `deployment.md`, `scope.md`, `project-overview.md`, `demo-runbook.md`, `dev-tools.md`, `security.md`, `AGENTS.md`.
+
+## 2026-11-08 — Own-truck delivery: packing, dispatch, driver PIN handoff, private tracking
+
+**What:**
+- **Schema** (`prisma/schema.prisma`, migration `20261108000000_trips_staff_handoff`):
+  - Roles `PACKER` and `DRIVER`, and order status `PACKED` before `READY`.
+  - New `Trip` model and `TripStatus` enum.
+  - New `Order` fields: `deliveryDate`, `tripId`, `stopIndex`, `loadedAt`, `handoffPin`, `pinAttempts`.
+  - The migration backfills `deliveryDate` on existing orders.
+- **Roles:** `lib/roles.ts` is one table of which role opens `/admin` and which `/staff/*` screen. It is used by `auth.config.ts` (proxy), `lib/session.ts` (new `requireRole`), login routing (`lib/actions/auth.ts`, `/login`) and `ShopHeader`. `proxy.ts` now also matches `/staff/:path*`.
+- **Staff screens** (`app/(staff)/staff/**`, `components/staff/*`):
+  - **Packer queue** with "Today's pull" totals.
+  - **Tap-to-tick pick list** ending in "Mark packed" (stamp and undo).
+  - **Loading checklist,** last stop first. Ticks are saved.
+  - **Driver trip screen** with call, Maps link, COD banner, a PIN keypad handoff, a no-PIN fallback (reason and who received it), "Couldn't deliver", and "Back at stall" with the cash total.
+- **Office:**
+  - New `/admin/dispatch` (`components/admin/DispatchBoard.tsx`). It drafts a trip per day and slot in barangay route order, reorders stops, moves an order to another trip, sets driver and vehicle, scraps a draft, and confirms returned cash (a note is required when the amount differs).
+  - Nav entry with a badge.
+  - Inbox groups for trips with cash to confirm and for deliveries without a PIN.
+  - `OrdersBoard` gains a Packed tab and trip details, and loses the "Lalamove" label. "Mark delivered" now needs a written reason (`markDeliveredByOffice`, timeline note "Office: …"). `advanceOrder` only does Confirm and Mark packed.
+- **Actions and reads:** `lib/actions/trips.ts` (every write, role-checked, timeline events with the actor) and `lib/trips-data.ts`.
+- **Checkout:** the delivery date is computed server-side (before 9 PM → next morning, never Sunday). `SLOT_CAPACITY` (12) is enforced inside the order transaction. The slot picker shows "N left" or "Full". A PIN is generated per order, and the receipt shows the delivery day.
+- **Private tracking** (`lib/track-access.ts`, `lib/orders.ts` `lookupOrder`, `lib/actions/track.ts`, `components/shop/TrackLookup.tsx`):
+  - `/track` and `/receipt` need the signed-in owner, staff, or the code plus the last 4 phone digits, which gives a shareable HMAC tracking link.
+  - The owner sees the handoff PIN (`HandoffCard`), the driver and vehicle, and "stop N of M" (`OrderTracker`, now 5 stages).
+  - `/account` shows the PIN on packed and on-the-truck orders.
+  - The public timeline shows only cancellation notes.
+- **Seed:** packer and driver accounts (`packer@`, `driver@`, `driver2@hookandbox.ph`). Orders use the customer's saved contact, get PINs and delivery dates, and closed trips back last week's history. Today has one returned trip, one on the road, one being loaded, and one packed order with no trip.
+- **Dev tools and copy:** dev probes and scenarios know `PACKED`, and test orders skip slot capacity. Customer copy says "driver" instead of "rider".
+
+**Why:**
+- **User request:** an interface for delivery drivers and packing staff, because the office was the one clicking "delivered".
+- **User decision:** run delivery on the store's own truck instead of a courier label, with trips per slot, a loading checklist, a cash remit record, "stop N of M" and a slot limit.
+- **User question:** whether people who know an order ID can track it. Answer: yes, codes are sequential, so the code alone no longer opens an order.
+
+**Impact:**
+- **Apply the migration before deploying** (`npx prisma migrate deploy`). Enum values can't be dropped, so roll forward only. Reseed (`npx prisma db seed`, which wipes orders) to get the demo trips and staff accounts.
+- **Ledger untouched:** no `StockMovement` is written by packing, loading or delivery. Cancelling a packed order still returns its stock and takes it off its trip.
+- **Old orders have no PIN.** Drivers finish them with the "Order placed before PINs" reason.
+- **Docs updated:** `scope.md` (in-scope rows and six change-log rows, pending team agreement), `data-model.md` and `diagrams/erd.mmd`, `project-overview.md`, `deployment.md`, `demo-runbook.md`, new `security.md`, and the `AGENTS.md` known issues.
+- **Not verified in a browser:** this build was not exercised against a running database. The shared Supabase migration has not been applied.
+
 ## 2026-11-07 — Reopenable, printable order receipts
 
 **What:**

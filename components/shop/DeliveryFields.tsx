@@ -32,7 +32,7 @@ export function DeliveryFields({
   addressFirst?: boolean;
 }) {
   const phone = (
-    <Field label="Mobile number" htmlFor={`${idPrefix}-phone`} error={errors.phone} hint="The rider calls this number on arrival.">
+    <Field label="Mobile number" htmlFor={`${idPrefix}-phone`} error={errors.phone} hint="The driver calls this number on arrival.">
       <Input id={`${idPrefix}-phone`} inputMode="tel" autoComplete="tel" placeholder="0917 123 4567" value={value.phone} aria-invalid={!!errors.phone} onChange={e => onChange({ phone: e.target.value })} />
     </Field>
   );

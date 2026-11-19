@@ -1,4 +1,4 @@
-%% Hook & Box ERD — derived from prisma/schema.prisma (2026-11-07).
+%% Hook & Box ERD — derived from prisma/schema.prisma (2026-11-08).
 %% If this and the schema ever disagree, the schema wins; update this file.
 erDiagram
   User ||--o{ Order : places
@@ -11,13 +11,16 @@ erDiagram
   Order ||--|{ OrderItem : contains
   Order |o--o{ StockMovement : "caused (orderId)"
   Order ||--o{ OrderStatusEvent : "timeline of"
+  Trip |o--o{ Order : "carries (tripId)"
+  User |o--o{ Trip : "drives (driverId)"
+  User |o--o{ Trip : "counts cash (remitConfirmedById)"
 
   User {
     string id PK
     string name
     string email UK
     string passwordHash
-    Role role "ADMIN | CUSTOMER"
+    Role role "ADMIN | PACKER | DRIVER | CUSTOMER"
     string phone "saved delivery details, optional"
     string address "saved delivery details, optional"
     string barangay "saved delivery details, optional"
@@ -65,9 +68,30 @@ erDiagram
     string deliveryAddress
     string deliveryBarangay
     string deliverySlot
+    date deliveryDate "Manila day of the slot"
     int deliveryFeeCentavos
     int totalCentavos
+    string tripId FK "optional"
+    int stopIndex "stop number on the trip"
+    datetime loadedAt "ticked onto the truck"
+    string handoffPin "customer-only, 4 digits"
+    int pinAttempts "locks at 5"
     datetime createdAt
+  }
+  Trip {
+    string id PK
+    int tripNumber UK "shown as T-012"
+    date date
+    string slot
+    string vehicle "label only"
+    TripStatus status "PLANNED | OUT | RETURNED | REMITTED"
+    string driverId FK "optional"
+    datetime departedAt
+    datetime returnedAt
+    int cashRemittedCentavos "COD cash counted"
+    string remitNote
+    string remitConfirmedById FK "optional"
+    datetime remittedAt
   }
   OrderItem {
     string id PK

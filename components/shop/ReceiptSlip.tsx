@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { PAYMENT_LABEL, STATUS_META, type OrderStatusKey } from "@/lib/meta";
 import { peso } from "@/lib/money";
 import { Stamp } from "@/components/ui/motion";
+import { fmtDay } from "@/lib/time";
 
 export type ReceiptLine = { key: string; label: string; qty: number; price: number };
 
@@ -20,6 +21,7 @@ export function ReceiptSlip({
   total,
   payment,
   slot,
+  day,
   status,
   placedAt,
   animated = false,
@@ -30,6 +32,8 @@ export function ReceiptSlip({
   total: number;
   payment: keyof typeof PAYMENT_LABEL;
   slot: string;
+  /** Delivery day key ("2026-11-08"); older orders may have none. */
+  day?: string | null;
   status: OrderStatusKey;
   placedAt?: string;
   animated?: boolean;
@@ -90,10 +94,13 @@ export function ReceiptSlip({
             )}
             <dt className="text-ink-3">Payment</dt>
             <dd className="text-right font-semibold">{PAYMENT_LABEL[payment]}</dd>
-            <dt className="text-ink-3">Delivery slot</dt>
-            <dd className="text-right font-semibold">{slot || "—"}</dd>
+            <dt className="text-ink-3">Delivery</dt>
+            <dd className="text-right font-semibold">
+              {day ? `${fmtDay(day)}, ` : ""}
+              {slot || "—"}
+            </dd>
             <dt className="text-ink-3">Status</dt>
-            <dd className="text-right font-semibold">{STATUS_META[status].label}</dd>
+            <dd className="text-right font-semibold">{STATUS_META[status].customer}</dd>
           </dl>
           <div className="pointer-events-none mt-7 flex justify-center pb-2">
             <Stamp tone={cancelled ? "ink" : "marker"} rotate={-8} delay={moving ? 1.15 : 0} still={!animated} className="text-[28px]">

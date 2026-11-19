@@ -9,6 +9,7 @@ import { OfflineBanner } from "@/components/shop/OfflineBanner";
 import { ShopHeader } from "@/components/shop/ShopHeader";
 import { TarpCrawl } from "@/components/shop/TarpCrawl";
 import { ToastProvider } from "@/components/ui/toast";
+import { DevSwitcherGate } from "@/components/dev/DevSwitcherGate";
 
 /**
  * The layout itself awaits nothing: the price crawl, the signed-in header and
@@ -37,7 +38,12 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
 
 async function HeaderWithUser() {
   const user = await getUser();
-  return <ShopHeader user={user ? { name: user.name, role: user.role } : null} />;
+  return (
+    <>
+      <DevSwitcherGate user={user} />
+      <ShopHeader user={user ? { name: user.name, role: user.role } : null} />
+    </>
+  );
 }
 
 async function CatalogOfflineBanner() {

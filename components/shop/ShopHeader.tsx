@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Menu, Search, User, X } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
+import { homeFor, type AppRole } from "@/lib/roles";
 import { BasketButton, BasketSheet } from "./BasketUI";
 
 const NAV = [
@@ -14,7 +15,13 @@ const NAV = [
   { href: "/about", label: "About" },
 ];
 
-export function ShopHeader({ user }: { user: { name: string | null; role: "ADMIN" | "CUSTOMER" } | null }) {
+const STAFF_LINK: Record<Exclude<AppRole, "CUSTOMER">, string> = {
+  ADMIN: "Staff admin",
+  PACKER: "Packing",
+  DRIVER: "My trips",
+};
+
+export function ShopHeader({ user }: { user: { name: string | null; role: AppRole } | null }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const router = useRouter();
@@ -40,9 +47,9 @@ export function ShopHeader({ user }: { user: { name: string | null; role: "ADMIN
   }
 
   const account = user
-    ? user.role === "ADMIN"
-      ? { href: "/admin", label: "Staff admin" }
-      : { href: "/account", label: "My account" }
+    ? user.role === "CUSTOMER"
+      ? { href: "/account", label: "My account" }
+      : { href: homeFor(user.role), label: STAFF_LINK[user.role] }
     : { href: `/login?next=${encodeURIComponent(pathname)}`, label: "Sign in" };
 
   const search = (

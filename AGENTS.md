@@ -172,7 +172,26 @@ task is wasted cost and is not allowed here.
 Adding a new project-wide "never do this" rule? Encode it as a rule in
 `scripts/check-footguns.ts` so it's enforced, not just documented.
 
-## Known issues / current gaps (updated 2026-11-07)
+## Known issues / current gaps (updated 2026-11-08)
+
+0. **Speed pass 2 + staff UI (2026-11-07):** Prisma `relationJoins` preview is
+   on; hot nested reads pass `relationLoadStrategy: "join"`. Batch multi-row
+   writes (`unnest`/`updateMany`/`createMany`), never a loop of updates in
+   a transaction. Staff actions invalidate `staff`+`orders` only. Migration
+   `20261109000000_perf_indexes` must be applied. Confirming prints a 4×6 bag
+   label (`components/staff/BagLabel.tsx`, `PrintLabels.tsx`): never put
+   phone, address, stop number or `handoffPin` on it. Staff chips use task
+   words (`STATUS_META.label`); customer UI uses `shopLabel`/`customer`.
+   Dev account switcher: `lib/actions/dev-switch.ts` (`docs/dev-tools.md`).
+
+0. **Own-truck delivery (2026-11-08):** roles `PACKER`/`DRIVER` (`lib/roles.ts`,
+   one table for proxy + pages), status `PACKED`, `Trip` model. Staff screens
+   live in `app/(staff)/staff/**`; trip writes in `lib/actions/trips.ts`, reads
+   in `lib/trips-data.ts`. Never select or render `Order.handoffPin` anywhere
+   but the owner's views in `lib/orders.ts`. `/track` and `/receipt` go through
+   `lookupOrder()` + `lib/track-access.ts`: never show an order by code alone.
+   Migration `20261108000000_trips_staff_handoff` must be applied first
+   (`docs/deployment.md`).
 
 0. **Saved delivery details (2026-11-07):** `User.phone/address/barangay` prefill
    checkout and are edited on `/account`. Read them with `getDeliveryProfile()`

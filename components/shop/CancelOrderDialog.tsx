@@ -63,7 +63,7 @@ export function CancelOrderDialog({ code }: { code: string }) {
             <span className="text-ink">· Cancel order</span>
           </span>
         }
-        description="Orders can be cancelled anytime before they are marked Out for delivery."
+        description="Orders can be cancelled any time before they go on the truck."
         footer={
           <div className="flex items-center justify-end gap-3">
             <Button variant="ghost" onClick={() => setOpen(false)}>

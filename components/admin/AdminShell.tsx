@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   Package,
+  PackageOpen,
   Plus,
   Scale,
   ScrollText,
@@ -22,6 +23,7 @@ import {
   ShoppingBag,
   Store,
   Tags,
+  Truck,
   Wrench,
   X,
   type LucideIcon,
@@ -30,7 +32,7 @@ import { Logo } from "@/components/brand/Logo";
 import { Kbd } from "@/components/ui/primitives";
 import { logoutAction } from "@/lib/actions/auth";
 
-export type Counts = { pending: number; out: number; low: number; toSale: number };
+export type Counts = { pending: number; out: number; low: number; toSale: number; dispatch: number };
 export type PaletteItem = { label: string; hint?: string; href: string; group: string; keywords?: string; icon?: LucideIcon };
 
 /**
@@ -138,6 +140,13 @@ const NAV: NavItem[] = [
     badge: c => (c.pending ? { n: c.pending, tone: "yellow" } : null),
   },
   {
+    href: "/admin/dispatch",
+    label: "Dispatch",
+    icon: Truck,
+    keys: "g v",
+    badge: c => (c.dispatch ? { n: c.dispatch, tone: "yellow" } : null),
+  },
+  {
     href: "/admin/stock",
     label: "Stock",
     icon: Scale,
@@ -150,9 +159,24 @@ const NAV: NavItem[] = [
   { href: "/admin/ledger", label: "Stock ledger", icon: ScrollText, keys: "g l" },
 ];
 
+/**
+ * Shortcuts to the packer's and driver's own screens, for developer accounts
+ * (DEV_EMAILS) testing every role. Regular admins don't see the links; they
+ * can still open the screens by URL (lib/roles.ts allows ADMIN).
+ */
+const STAFF_SCREENS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/staff/pack", label: "Packing screen", icon: Package },
+  { href: "/staff/load", label: "Loading screen", icon: PackageOpen },
+  { href: "/staff/trip", label: "Driver screen", icon: Truck },
+];
+
+/** Phone tab bar; the rest of NAV goes in the "More" sheet. */
+const TAB_HREFS = ["/admin", "/admin/orders", "/admin/dispatch", "/admin/stock"];
+
 const GO: Record<string, string> = {
   t: "/admin",
   o: "/admin/orders",
+  v: "/admin/dispatch",
   s: "/admin/stock",
   w: "/admin/stock?mode=walkin",
   c: "/admin/stock?mode=count",
@@ -167,6 +191,7 @@ const SHORTCUTS: [string, string][] = [
   ["/", "Search this page"],
   ["g t", "Go to Today"],
   ["g o", "Go to Orders"],
+  ["g v", "Go to Dispatch"],
   ["g s", "Go to Stock"],
   ["g w", "Walk-in sale"],
   ["g c", "Morning count"],
@@ -174,7 +199,7 @@ const SHORTCUTS: [string, string][] = [
   ["g p", "Products"],
   ["g l", "Stock ledger"],
   ["n", "New product"],
-  ["a", "Advance the open order"],
+  ["a", "Next step for the order (confirm, mark packed)"],
   ["?", "Show these shortcuts"],
 ];
 
@@ -298,6 +323,16 @@ export function AdminShell({
               </Link>
             );
           })}
+          {isDev && <p className="mt-4 px-3 pb-1 text-[12px] font-semibold text-ink-3">Staff screens</p>}
+          {isDev && STAFF_SCREENS.map(item => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex h-9 items-center gap-3 rounded-lg px-3 text-[13px] font-semibold text-ink-2 transition-colors hover:bg-ice hover:text-ink"
+            >
+              <item.icon className="size-4" aria-hidden /> {item.label}
+            </Link>
+          ))}
         </nav>
         <div className="flex flex-col gap-1 border-t border-ice-3 p-3">
           {isDev && (
@@ -349,7 +384,7 @@ export function AdminShell({
         className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-ice-3 bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden"
         aria-label="Admin"
       >
-        {[NAV[0], NAV[1], NAV[2], NAV[4]].map(item => {
+        {TAB_HREFS.map(href => NAV.find(n => n.href === href)!).map(item => {
           const active = isActive(item.href);
           return (
             <Link
@@ -392,7 +427,7 @@ export function AdminShell({
               transition={{ type: "spring", stiffness: 420, damping: 38 }}
             >
               <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-ice-3" aria-hidden />
-              {[NAV[3], NAV[5], NAV[6]].map(item => (
+              {NAV.filter(n => !TAB_HREFS.includes(n.href)).map(item => (
                 <Link key={item.href} href={item.href} className="flex h-12 items-center gap-3 rounded-lg px-3 font-semibold text-ink hover:bg-ice">
                   <item.icon className="size-5 text-ink-2" aria-hidden /> {item.label}
                 </Link>
@@ -400,6 +435,11 @@ export function AdminShell({
               <Link href="/admin/stock?mode=walkin" className="flex h-12 items-center gap-3 rounded-lg px-3 font-semibold text-ink hover:bg-ice">
                 <Scale className="size-5 text-ink-2" aria-hidden /> Walk-in sale
               </Link>
+              {isDev && STAFF_SCREENS.map(item => (
+                <Link key={item.href} href={item.href} className="flex h-12 items-center gap-3 rounded-lg px-3 font-semibold text-ink hover:bg-ice">
+                  <item.icon className="size-5 text-ink-2" aria-hidden /> {item.label}
+                </Link>
+              ))}
               {isDev && (
                 <Link href="/admin/dev" className="flex h-12 items-center gap-3 rounded-lg px-3 font-semibold text-ink hover:bg-ice">
                   <Wrench className="size-5 text-ink-2" aria-hidden /> Dev tools

@@ -178,7 +178,7 @@ export async function runDataChecks(db: PrismaClient): Promise<CheckReport> {
   check(results, emptySkus === 0, "Every variant has a SKU", `${emptySkus} empty`);
 
   const noHash = users.filter(u => !u.passwordHash || u.passwordHash.length < 20).map(u => u.email);
-  const badRole = users.filter(u => u.role !== "ADMIN" && u.role !== "CUSTOMER").length;
+  const badRole = users.filter(u => !["ADMIN", "CUSTOMER", "PACKER", "DRIVER"].includes(u.role)).length;
   const admins = users.filter(u => u.role === "ADMIN").length;
   check(results, noHash.length === 0, "Every user has a password hash", sample(noHash), `${users.length} users`);
   check(results, badRole === 0, "Every user has a valid role", `${badRole} invalid`);

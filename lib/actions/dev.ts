@@ -26,7 +26,9 @@ import {
   orderCounts,
 } from "@/lib/admin-data";
 import { loadCatalogFromDb } from "@/lib/catalog";
-import { findOrderByNumber } from "@/lib/orders";
+import { lookupOrder } from "@/lib/orders";
+import { trackToken } from "@/lib/track-access";
+import { dispatchBoard } from "@/lib/trips-data";
 import { cancelOrderTx, createOrderTx, type PlaceOrderData } from "@/lib/orders-core";
 import { stockByVariant } from "@/lib/stock-sql";
 import { orderCode } from "@/lib/meta";
@@ -57,7 +59,8 @@ export async function runProbes(): Promise<ActionResult<{ rows: ProbeRow[]; at: 
     ["Orders board (counts + 200 orders)", () => Promise.all([orderCounts(), listOrders("ALL")])],
     ["Stock ledger, 30 days", () => loadLedger({ sinceDays: 30 })],
     ["Storefront catalog", loadCatalogFromDb],
-    ["Track an order", () => (latest ? findOrderByNumber(latest.orderNumber) : Promise.resolve(null))],
+    ["Track an order (tracking link)", () => (latest ? lookupOrder(latest.orderNumber, null, trackToken(latest.orderNumber)) : Promise.resolve(null))],
+    ["Dispatch board", dispatchBoard],
   ];
 
   const rows: ProbeRow[] = [];
@@ -85,7 +88,9 @@ function orderFor(lines: { variantId: string; qty: number }[]): PlaceOrderData {
   return { items: lines, delivery: testDelivery(), payment: "COD" };
 }
 
-const testOpts = { reasonSuffix: DEV_REASON_SUFFIX, note: DEV_ORDER_NOTE };
+// Test orders skip the slot capacity check (they measure stock contention),
+// but still count toward a slot until cleaned up.
+const testOpts = { reasonSuffix: DEV_REASON_SUFFIX, note: DEV_ORDER_NOTE, skipCapacity: true };
 
 function pick<T>(list: T[]): T {
   return list[Math.floor(Math.random() * list.length)];

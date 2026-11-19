@@ -74,14 +74,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                       dismiss(t.id);
                       await t.undo?.();
                     }}
-                    className="-my-1 inline-flex h-8 items-center gap-1.5 rounded-lg bg-white/12 px-3 text-[13px] font-semibold text-tarp transition-colors hover:bg-white/20"
+                    className="-my-2 inline-flex h-11 items-center gap-1.5 rounded-lg bg-white/12 px-4 text-[14px] font-semibold text-tarp transition-colors hover:bg-white/20"
                   >
                     <Undo2 className="size-4" aria-hidden /> Undo
                   </button>
                 )}
                 <button
                   onClick={() => dismiss(t.id)}
-                  className="-my-1 -mr-2 grid size-8 place-items-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
+                  className="-my-2 -mr-2 grid size-11 place-items-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
                   aria-label="Dismiss"
                 >
                   <X className="size-4" />

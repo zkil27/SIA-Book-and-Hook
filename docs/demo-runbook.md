@@ -37,7 +37,10 @@ reopens the same slip, ready to print.
 
 **2. Admin login (30s)**
 Sign out, sign in as `admin@hookandbox.ph`. Land on **Today**: the order you
-just placed is waiting in the inbox. Press **Confirm**, then **Undo** on the toast.
+just placed is waiting in the inbox, and the flow strip shows where every open
+order is. Press **Confirm & print**: the browser's print dialog opens on the
+4×6 bag label (cancel it, or switch "Print a bag label when confirming" off on
+Orders for a printer-less demo). Then **Undo** on the toast.
 > "Access is role-based — a customer account is turned away from /admin by the
 > proxy, and every admin action checks the role again."
 
@@ -58,6 +61,23 @@ everything else. Press **Counter** on an entry to show a correction being added.
 
 This is the moment that separates the project from a typical class demo. Don't
 rush it.
+
+**4b. Delivery on our own truck (90s, optional)**
+Tip: sign in as your dev account and use the **Dev** pill at the top of the
+screen to switch to Packer or Driver in one click (`docs/dev-tools.md`), or
+keep a second role open in an Incognito window on the second monitor.
+Open `/admin/dispatch`: today's 6–8 AM trip is back with cash to count, the
+8–10 AM trip is on the road, and the 10 AM–12 NN trip is being loaded. Count the
+cash on the returned trip. In a second browser (or phone), sign in as
+`driver@hookandbox.ph / driver123`, open the 8–10 AM trip and press **Hand
+over the order** on the next stop. For a cash order the first step is **I
+collected ₱…**; then the PIN pad appears. In a third, sign in as
+`maria@example.com` and open her order on `/track`: it says "You're stop N of
+M" and shows her 4-digit PIN. Type that PIN on the driver's keypad: the stop
+stamps **Delivered** and her tracker moves on.
+> "Nobody in the office clicks 'delivered' any more. The customer's PIN proves
+> the handoff, and if there's no PIN the driver has to write down why, which
+> the office sees."
 
 **5. Documentation (60s)**
 Show `docs/` in the repo: scope with its out-of-scope section, the ERD, the SRS

@@ -70,3 +70,57 @@ export function shopIsOpen(at: Date = new Date()): boolean {
 export function shopHour(at: Date = new Date()): number {
   return new Date(at.getTime() + OFFSET_MS).getUTCHours();
 }
+
+// ── Delivery days ────────────────────────────────────────────────────────────
+// A delivery day is a Manila calendar date. Prisma `@db.Date` columns hold it
+// as a Date at UTC midnight of that day, so these helpers work in UTC parts.
+
+/** Orders placed before this Manila hour go out the next morning. */
+export const ORDER_CUTOFF_HOUR = 21;
+
+/** The Manila calendar day containing `at`, as a UTC-midnight Date. */
+export function shopDate(at: Date = new Date()): Date {
+  const local = new Date(at.getTime() + OFFSET_MS);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()));
+}
+
+export function addDays(day: Date, n: number): Date {
+  return new Date(day.getTime() + n * DAY_MS);
+}
+
+/**
+ * The morning an order placed at `placedAt` is delivered: the next day when
+ * ordered before 9 PM, otherwise the day after. The store is closed on
+ * Sundays, so a Sunday delivery moves to Monday.
+ */
+export function deliveryDateFor(placedAt: Date = new Date()): Date {
+  let day = addDays(shopDate(placedAt), shopHour(placedAt) >= ORDER_CUTOFF_HOUR ? 2 : 1);
+  if (day.getUTCDay() === 0) day = addDays(day, 1);
+  return day;
+}
+
+/** "2026-11-08" for a delivery day (URL- and form-safe). */
+export const dayKey = (day: Date) => day.toISOString().slice(0, 10);
+
+/** Parse a "YYYY-MM-DD" day key; null when malformed. */
+export function parseDayKey(key: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return null;
+  const d = new Date(`${key}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+const dayFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" });
+const longDayFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" });
+
+/** "Sat, Nov 8" for a delivery day. */
+export const fmtDay = (day: Date | string) => dayFmt.format(new Date(day));
+/** "Saturday, November 8" for a delivery day. */
+export const fmtLongDay = (day: Date | string) => longDayFmt.format(new Date(day));
+
+/** "Today", "Tomorrow" or "Sat, Nov 8", relative to the shop's today. */
+export function fmtDayRelative(day: Date | string, now: Date = new Date()): string {
+  const key = dayKey(new Date(day));
+  if (key === dayKey(shopDate(now))) return "Today";
+  if (key === dayKey(addDays(shopDate(now), 1))) return "Tomorrow";
+  return fmtDay(day);
+}

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, PackagePlus, ScrollText } from "lucide-react";
+import { ArrowRight, Banknote, KeyRound, PackagePlus, ScrollText } from "lucide-react";
 import { getDashboard } from "@/lib/admin-data";
-import { splitName } from "@/lib/meta";
+import { splitName, STATUS_META, type OrderStatusKey } from "@/lib/meta";
 import { peso } from "@/lib/money";
-import { ago, fmtLongDate, shopIsOpen } from "@/lib/time";
+import { ago, fmtLongDate, fmtTime, shopIsOpen } from "@/lib/time";
 import { AgeBadge, PageHeader, Panel, StockCount, Thumb } from "@/components/admin/kit";
 import { ConfirmButton, SalesBars, TopSellers } from "@/components/admin/TodayParts";
 import { ButtonLink } from "@/components/ui/primitives";
@@ -15,7 +15,12 @@ export const metadata = { title: "Today" };
 export default async function TodayPage() {
   const d = await getDashboard();
   const alerts = d.outOfStock.length + d.lowStock.length;
-  const nothingToDo = d.pendingCount === 0 && alerts === 0 && d.toSale.length === 0;
+  const nothingToDo =
+    d.pendingCount === 0 &&
+    alerts === 0 &&
+    d.toSale.length === 0 &&
+    d.cashToConfirm.length === 0 &&
+    d.noPinDeliveries.length === 0;
 
   return (
     <>
@@ -61,6 +66,8 @@ export default async function TodayPage() {
         ))}
       </dl>
 
+      <OrderFlow pipeline={d.pipeline} packedNoTrip={d.packedNoTrip} />
+
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.25fr_1fr]">
         {/* Inbox */}
         <Panel title="Needs you now" pad={false}>
@@ -86,7 +93,52 @@ export default async function TodayPage() {
                           {o.items} item{o.items === 1 ? "" : "s"} · {peso(o.total)} · {o.slot || "no slot"} · {ago(o.createdAt)}
                         </p>
                       </Link>
-                      <ConfirmButton orderId={o.id} code={o.code} />
+                      <ConfirmButton orderId={o.id} code={o.code} label={o.label} />
+                    </li>
+                  ))}
+                </InboxGroup>
+              )}
+              {d.cashToConfirm.length > 0 && (
+                <InboxGroup
+                  label={`${d.cashToConfirm.length} trip${d.cashToConfirm.length === 1 ? "" : "s"} back, cash to confirm`}
+                  href="/admin/dispatch"
+                >
+                  {d.cashToConfirm.map(t => (
+                    <li key={t.id} className="flex items-center gap-3 px-5 py-3">
+                      <Banknote className="size-5 shrink-0 text-ink-3" aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2">
+                          <span className="font-mono text-[13px] font-bold text-ink">{t.code}</span>
+                          <span className="truncate font-semibold text-ink">{t.driver}</span>
+                        </p>
+                        <p className="text-[13px] text-ink-3">
+                          {t.label} · back {t.returnedAt ? fmtTime(t.returnedAt) : ""} · expect {peso(t.expected)} cash
+                        </p>
+                      </div>
+                      <Link
+                        href="/admin/dispatch"
+                        className="inline-flex h-8 items-center rounded-lg px-2.5 text-[13px] font-semibold text-teal-deep ring-1 ring-inset ring-ice-3 hover:bg-mint-soft"
+                      >
+                        Count cash
+                      </Link>
+                    </li>
+                  ))}
+                </InboxGroup>
+              )}
+              {d.noPinDeliveries.length > 0 && (
+                <InboxGroup label="Delivered without a customer PIN (last 3 days)" href="/admin/orders?status=COMPLETED">
+                  {d.noPinDeliveries.map(e => (
+                    <li key={e.id} className="flex items-center gap-3 px-5 py-3">
+                      <KeyRound className="size-5 shrink-0 text-[#8a6100]" aria-hidden />
+                      <Link href={`/admin/orders?open=${e.code}`} className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2">
+                          <span className="font-mono text-[13px] font-bold text-ink">{e.code}</span>
+                          <span className="truncate font-semibold text-ink">{e.customer}</span>
+                        </p>
+                        <p className="truncate text-[13px] text-ink-3">
+                          {e.note} · {e.by} · {ago(e.at)}
+                        </p>
+                      </Link>
                     </li>
                   ))}
                 </InboxGroup>
@@ -174,5 +226,55 @@ function StockRow({
         {action}
       </Link>
     </li>
+  );
+}
+
+/**
+ * Where every open order is right now, left to right, and who moves it on.
+ * Each step links to the screen where that work happens, so the flow is on
+ * the page instead of in someone's head.
+ */
+function OrderFlow({ pipeline, packedNoTrip }: { pipeline: Record<OrderStatusKey | "ALL", number>; packedNoTrip: number }) {
+  const steps: { key: OrderStatusKey; who: string; href: string; hint: string }[] = [
+    { key: "PENDING", who: "Office", href: "/admin/orders?status=PENDING", hint: "Confirm & print the label" },
+    { key: "CONFIRMED", who: "Packer", href: "/staff/pack", hint: "Pack the bag" },
+    {
+      key: "PACKED",
+      who: "Office",
+      href: "/admin/dispatch",
+      hint: packedNoTrip > 0 ? `${packedNoTrip} need${packedNoTrip === 1 ? "s" : ""} a trip` : "Put on a trip",
+    },
+    { key: "READY", who: "Driver", href: "/admin/orders?status=READY", hint: "Deliver with the PIN" },
+  ];
+  return (
+    <nav aria-label="Order flow" className="mt-4">
+      <ol className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        {steps.map((s, i) => {
+          const n = pipeline[s.key];
+          const hot = n > 0 && (s.key !== "PACKED" || packedNoTrip > 0);
+          return (
+            <li key={s.key} className="relative">
+              <Link
+                href={s.href}
+                className={`flex h-full flex-col rounded-[var(--radius-card)] px-4 py-3 ring-1 ring-inset transition-colors duration-150 ${
+                  hot ? "bg-paper ring-teal/50 hover:bg-mint-soft" : "bg-paper/60 ring-ice-3 hover:bg-paper"
+                }`}
+              >
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="text-[14px] font-bold text-ink">{STATUS_META[s.key].label}</span>
+                  <span className={`tabular text-[22px] font-bold leading-none ${hot ? "text-teal-deep" : "text-ink-3"}`}>{n}</span>
+                </span>
+                <span className="mt-1 text-[12px] text-ink-3">
+                  {s.who} · {s.hint}
+                </span>
+              </Link>
+              {i < steps.length - 1 && (
+                <ArrowRight className="absolute -right-2 top-1/2 z-10 hidden size-4 -translate-y-1/2 rounded-full bg-ice text-ink-3 md:block" aria-hidden />
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }

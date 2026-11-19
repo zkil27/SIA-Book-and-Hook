@@ -4,10 +4,11 @@ import prisma from "@/lib/prisma";
 import { requireAdmin } from "@/lib/session";
 import { isDevEmail } from "@/lib/dev/access";
 import { getAdminCounts, loadInventory, sellable } from "@/lib/admin-data";
-import { orderCode, STATUS_META } from "@/lib/meta";
+import { OPEN_STATUSES, orderCode, STATUS_META } from "@/lib/meta";
 import { AdminShell, type ShellData } from "@/components/admin/AdminShell";
 import { AdminShellSkeleton } from "@/components/admin/skeletons";
 import { ToastProvider } from "@/components/ui/toast";
+import { DevSwitcherGate } from "@/components/dev/DevSwitcherGate";
 
 export const metadata: Metadata = { title: { default: "Admin", template: "%s · Hook & Box admin" } };
 
@@ -30,13 +31,16 @@ async function AdminGate({ children }: { children: ReactNode }) {
   const admin = await requireAdmin();
   const data = loadShellData();
   return (
-    <AdminShell data={data} userName={admin.name ?? admin.email} isDev={isDevEmail(admin.email)}>
-      {children}
-    </AdminShell>
+    <>
+      <DevSwitcherGate user={admin} />
+      <AdminShell data={data} userName={admin.name ?? admin.email} isDev={isDevEmail(admin.email)}>
+        {children}
+      </AdminShell>
+    </>
   );
 }
 
-const EMPTY: ShellData = { counts: { pending: 0, out: 0, low: 0, toSale: 0 }, orders: [], variants: [], products: [] };
+const EMPTY: ShellData = { counts: { pending: 0, out: 0, low: 0, toSale: 0, dispatch: 0 }, orders: [], variants: [], products: [] };
 
 async function loadShellData(): Promise<ShellData> {
   try {
@@ -44,7 +48,7 @@ async function loadShellData(): Promise<ShellData> {
       getAdminCounts(),
       loadInventory(),
       prisma.order.findMany({
-        where: { status: { in: ["PENDING", "CONFIRMED", "READY"] } },
+        where: { status: { in: [...OPEN_STATUSES] } },
         orderBy: { createdAt: "asc" },
         select: { orderNumber: true, status: true, deliveryName: true },
         take: 60,

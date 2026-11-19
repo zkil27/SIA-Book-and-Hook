@@ -49,6 +49,38 @@ directly.
 | **Test scenarios** `/admin/dev/scenarios` | Place test orders, run a "morning rush" of simultaneous orders, clean up. | Yes (add-only) |
 | **UI gallery** `/admin/dev/gallery` | Real components with fixture data in every state: product cards (in stock, low, one size out, sold out, offline), price tags, stock/age badges, every order status and tracker, buttons, chips, stamps, toasts, banners, offline panel, loading skeletons, empty basket sheet. | No |
 
+## Dev account switcher and testing several roles at once
+
+**The pill.** When you are signed in as a developer (ADMIN + `DEV_EMAILS`),
+a small **Dev** pill sits at the top centre of the admin, staff and shop
+screens: "Dev · Kiel (Admin)". Tap it for a list of accounts by role (Admin,
+Packer, Driver, Customer; up to 10 each). One tap signs you in as that
+account, no password, and lands on its home screen. The pill turns yellow,
+"Viewing as Nonoy (Packer)", and **Back to me** returns to your own admin
+account. Nobody else ever sees the pill, and each switch is re-checked on the
+server (`docs/security.md`). Files: `lib/actions/dev-switch.ts`,
+`lib/dev/switch-token.ts`, `components/dev/DevSwitcher*.tsx`, the
+`dev-switch` provider in `auth.ts`.
+
+**Staff screen links.** Developer accounts also get a "Staff screens" group
+in the admin sidebar (Packing, Loading, Driver screen). Regular admins don't
+see it, though their role can still open those screens by URL.
+
+**Two roles side by side (two monitors).** A browser keeps one login per
+profile, so two windows of the *same* profile are always the same person. Use
+separate sessions:
+
+| Window | How | Role |
+|---|---|---|
+| Monitor 1 | Normal Chrome window | Sign in as the dev account; stay Admin |
+| Monitor 2 | Incognito window (Ctrl+Shift+N) | Sign in as the dev account once, then pill → Packer (or Driver) |
+| Third role | A second Chrome profile, or Edge | Same: sign in once, pill → Driver |
+| Locally only | `http://127.0.0.1:3000` next to `http://localhost:3000` | Different host = separate login |
+
+All Incognito windows share one session with each other, so use a separate
+profile or browser for a third role. Screens don't push updates: after a
+change in one window, navigate or refresh in the other.
+
 ## Test-data policy
 
 The graders see the same Supabase database, so test traffic is controlled:

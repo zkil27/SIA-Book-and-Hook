@@ -70,18 +70,51 @@ can only add to it, never edit or delete. Those two phrases are worth memorizing
 | User | What they can do |
 |---|---|
 | **Customer** | Browse the catalog, filter by category, view a product's price and stock, build a shopping cart, go through checkout, track an order by its ID, reopen and print its receipt, see their own past orders, and keep one saved phone number and address that fills in checkout for them. |
-| **Admin / staff** | Everything a customer can't: add/edit products, manage categories, adjust stock (with a reason), review orders and update their status, and see a simple dashboard. |
+| **Admin / staff** | Everything a customer can't: add/edit products, manage categories, adjust stock (with a reason), review orders and move them on, plan delivery trips and count the cash that comes back, and see a simple dashboard. **Confirming an order prints its bag label** (4×6 in thermal label, in the browser; one or many at once; can be switched off per device and reprinted from the order). The Orders tabs read as the order's journey: **To confirm → To pack → Packed → On the truck → Delivered**, the same words as each order's status chip, and the Today page shows the same flow with counts and who acts next. |
+| **Packer** | On a phone at `/staff/pack`: one list of orders to pack in delivery order, a fold-out "What to take out" total per item for the first delivery day, and the packed bags still at the stall. Opens an order, taps each line as it goes in the bag (ticks survive a refresh), marks it **Packed**, and goes straight to the next order. Can reprint the bag label. Helps load the truck. Can't open the admin. |
+| **Driver** | On a phone with two tabs in work order, **Load** then **Deliver**: loads the truck (only their own trips), starts the trip after one confirm, then the next stop sits on top with Call, Maps and the cash to collect. Handing over is step by step: take the cash (cash orders), then type the customer's **handoff PIN** (tries left always shown), or log why there's no PIN. A dropped signal keeps what was typed and offers Try again. Brings back what couldn't be delivered. Can't open the admin. |
 
-The only thing separating the two is a label on their account called a **role**
-(either `CUSTOMER` or `ADMIN`). If a customer tries to open an admin page, they
-get bounced out.
+The only thing separating them is a label on their account called a **role**
+(`CUSTOMER`, `ADMIN`, `PACKER` or `DRIVER`). Anyone who opens a screen that
+isn't theirs gets bounced out, and every action checks the role again.
+
+**How delivery works (2026-11-08): the store's own truck.** Orders placed
+before 9 PM go out the next morning in one of three slots. Each slot is one
+truck run, so checkout shows how many places are left ("3 left", "Full"). In the
+morning:
+
+1. **Pack.** The packer packs each confirmed order and marks it Packed.
+2. **Dispatch.** The office drafts a trip per slot at `/admin/dispatch`: the
+   slot's packed orders, sorted along the truck's fixed barangay loop. The
+   office can reorder stops, split orders onto a second vehicle and pick the
+   driver.
+3. **Load.** Packer or driver ticks every bag onto the truck (last stop
+   first). The trip can't leave until every bag is loaded.
+4. **Deliver.** The driver starts the trip; customers' trackers switch to
+   "On the truck · you're stop 3 of 7". At the door the customer reads out the
+   4-digit PIN from their account and the driver types it. No PIN? The driver
+   picks a reason and types who received it, and the office's inbox flags it.
+   Cash-on-delivery stops need the driver to confirm the cash.
+5. **Return.** "Back at stall" works once every stop is delivered or brought
+   back. The office counts the cash against the expected total; a difference
+   needs a note.
+
+The office can still mark an order delivered, but only with a written reason,
+and the timeline says "Office: …" so it never looks like a PIN-verified
+handoff. Packing and delivery never touch the stock ledger: stock left the
+shelf when the order was placed.
 
 A few behaviours worth knowing (2026-11-05):
 
+- **Tracking is private (2026-11-08).** Order codes count up (HB-0001,
+  HB-0002…), so a code alone no longer opens an order. It opens for the
+  customer who placed it (signed in), staff, or anyone who enters the code
+  **and the last 4 digits of the delivery phone**, who then gets a tracking link
+  they can share with family. See `docs/security.md`.
 - **Receipts can be reopened.** The checkout receipt also lives at
   `/receipt/HB-0005`, linked from the tracking page, and can be printed or saved
-  as a PDF. Like tracking, it opens with just the order code, so it leaves out
-  delivery details. It shows the payment method but never says "Paid", and it
+  as a PDF. It has the same access rule as tracking and leaves out delivery
+  details and the handoff PIN. It shows the payment method but never says "Paid", and it
   states that it isn't an official receipt.
 - **Cancelling an order needs a sign-in.** On the tracking page, a signed-out
   visitor sees "Sign in to cancel" instead of the Cancel button, and only the
@@ -175,8 +208,10 @@ Point at `docs/scope.md` if pressed. On purpose, we do **not** do:
   and shows instructions, but it captures no money. Orders simply end in a
   `PENDING` state. Handling real payment details in a school project is a
   liability we chose to avoid.
-- **Real delivery tracking / couriers.** "Lalamove" in the UI is just a label,
-  not a live connection. The tracker only shows our own order status.
+- **Courier apps or live GPS.** Delivery runs on the store's own truck and
+  staff; there is no courier integration and no live location. The tracker
+  shows our own order status and the stop number, and "Open in Maps" is a plain
+  link to the address.
 - **Email or text notifications.** None at all.
 - **Photo uploads.** Products use placeholder image links.
 - **An automated test suite.** We test by clicking through it ourselves.

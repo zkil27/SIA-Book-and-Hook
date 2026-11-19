@@ -10,8 +10,9 @@
  *
  * Builds a believable last week for the demo: dated opening stock (some of it
  * old enough to show in the FIFO "To sale" queue), a week of orders across
- * every status with their timelines, walk-in sales, spoilage, a morning-count
- * correction, an undo, and two price changes today.
+ * every status with their timelines, delivery trips on the store's own truck
+ * (closed history, plus today's runs at every stage), walk-in sales, spoilage,
+ * a morning-count correction, an undo, and two price changes today.
  *
  * Idempotent: clears seedable tables first. Demo users are upserted.
  * Run with: npx prisma db seed
@@ -19,6 +20,9 @@
 import { PrismaClient, OrderStatus, Role, type PaymentMethod } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { CATALOG } from "../lib/catalog-data";
+import { routeRank } from "../lib/meta";
+import { peso as fmtPeso } from "../lib/money";
+import { deliveryDateFor } from "../lib/time";
 
 const prisma = new PrismaClient();
 
@@ -54,6 +58,7 @@ async function clearData() {
   await prisma.stockMovement.deleteMany(); // footgun-ok: seed reset, not app code
   await prisma.orderItem.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.trip.deleteMany();
   await prisma.productVariant.deleteMany(); // footgun-ok: seed reset, not app code
   await prisma.product.deleteMany(); // footgun-ok: seed reset, not app code
   await prisma.category.deleteMany();
@@ -104,6 +109,9 @@ async function main() {
       barangay: "Langkaan",
     }),
   ]);
+  const packer = await upsertUser("packer@hookandbox.ph", "Nonoy (Packer)", Role.PACKER, "packer123");
+  const driver1 = await upsertUser("driver@hookandbox.ph", "Ramon (Driver)", Role.DRIVER, "driver123");
+  const driver2 = await upsertUser("driver2@hookandbox.ph", "Jun (Driver)", Role.DRIVER, "driver123");
   const customers = [maria, ...others];
   const staff = [admin, clerk];
 
@@ -162,46 +170,93 @@ async function main() {
     });
   }
 
-  // --- A week of orders ------------------------------------------------------
-  const addresses = [
-    ["Blk 5 Lot 12, Mabini St.", "Salawag"],
-    ["14 Aguinaldo Hwy", "Sampaloc"],
-    ["Phase 2, Blk 9 Lot 3", "Paliparan"],
-    ["22 Rizal Ave.", "Zone I"],
-    ["Villa Esperanza, Lot 7", "Langkaan"],
-    ["88 Burol Main Rd.", "Burol"],
-  ];
-  const slots = ["6:00–8:00 AM", "8:00–10:00 AM", "10:00 AM–12:00 NN"];
+  // --- A week of orders, packed and delivered on the store's own truck -------
+  // Each order goes out the morning after it's placed (lib/time.ts
+  // deliveryDateFor). Last week's orders rode trips that are closed and their
+  // cash counted. Yesterday's orders make today's three truck runs:
+  //   A (6–8 AM)   back at the stall, cash waiting for the office
+  //   B (8–10 AM)  on the road: one stop done, three on the truck
+  //   C (10–12 NN) being loaded, plus one packed order with no trip yet
+  // Today's orders (for tomorrow) wait to be confirmed or packed.
+  const SLOTS = ["6:00–8:00 AM", "8:00–10:00 AM", "10:00 AM–12:00 NN"];
+  const SLOT_START = [6, 8, 10];
   const sellableSkus = variants.filter(v => v.opening > 0 && !SLOW_MOVERS.has(v.sku)).map(v => v.sku);
-
-  type Plan = { day: number; hour: number; status: OrderStatus; lines?: [string, number][]; cancelNote?: string };
-  const plans: Plan[] = [
-    { day: 6, hour: 7.2, status: OrderStatus.COMPLETED },
-    { day: 6, hour: 9.5, status: OrderStatus.COMPLETED },
-    { day: 5, hour: 8.1, status: OrderStatus.COMPLETED },
-    { day: 5, hour: 15.4, status: OrderStatus.CANCELLED, cancelNote: "Customer cancelled" },
-    { day: 4, hour: 7.6, status: OrderStatus.COMPLETED },
-    { day: 4, hour: 11.3, status: OrderStatus.COMPLETED },
-    { day: 3, hour: 6.8, status: OrderStatus.COMPLETED },
-    { day: 3, hour: 13.9, status: OrderStatus.COMPLETED },
-    { day: 2, hour: 8.4, status: OrderStatus.COMPLETED },
-    { day: 2, hour: 10.2, status: OrderStatus.COMPLETED },
-    { day: 1, hour: 7.1, status: OrderStatus.COMPLETED },
-    { day: 1, hour: 16.5, status: OrderStatus.READY },
-    { day: 0, hour: 6.3, status: OrderStatus.CONFIRMED, lines: [["SQUID-PUSIT-1", 1], ["FISH-TILAPIA-W1", 2]] },
-    { day: 0, hour: 7.4, status: OrderStatus.PENDING, lines: [["CRAB-ALIMANGO-1", 1], ["SHELL-HIPON-500", 1]] },
-    { day: 0, hour: 8.2, status: OrderStatus.PENDING, lines: [["FISH-BANGUS-W1", 2], ["SHELL-HALAAN-1", 1]] },
-    { day: 0, hour: 8.9, status: OrderStatus.PENDING, lines: [["SHELL-SUGPO-500", 1], ["SQUID-BISAYA-500", 1]] },
-  ];
-  // Seeded orders begin in the past, so drop any that would land in the future.
+  /** Manila clock time `hour` on a delivery day (a UTC-midnight date). */
+  const onDay = (day: Date, hour: number) => new Date(day.getTime() + (hour - 8) * HOUR);
   const nowMs = Date.now();
-  const flow: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED, OrderStatus.READY, OrderStatus.COMPLETED];
+  /** Never in the future: the seed can run at any time of day. */
+  const past = (d: Date, slackMin = 1) => new Date(Math.min(d.getTime(), nowMs - slackMin * 60_000));
+  const pin = () => String(Math.floor(rand() * 10000)).padStart(4, "0");
+
+  type TripKey = "A" | "B" | "C";
+  type Plan = {
+    day: number;
+    hour: number;
+    status: OrderStatus;
+    lines?: [string, number][];
+    cancelNote?: string;
+    slot?: number;
+    who?: number; // index into customers
+    cod?: boolean;
+    trip?: TripKey;
+    noPin?: boolean; // delivered with a logged reason instead of the PIN
+    loaded?: boolean; // trip C: already ticked onto the truck
+  };
+  const S = OrderStatus;
+  const plans: Plan[] = [
+    { day: 6, hour: 7.2, status: S.COMPLETED },
+    { day: 6, hour: 9.5, status: S.COMPLETED },
+    { day: 5, hour: 8.1, status: S.COMPLETED },
+    { day: 5, hour: 15.4, status: S.CANCELLED, cancelNote: "Customer cancelled" },
+    { day: 4, hour: 7.6, status: S.COMPLETED },
+    { day: 4, hour: 11.3, status: S.COMPLETED, noPin: true },
+    { day: 3, hour: 6.8, status: S.COMPLETED },
+    { day: 3, hour: 13.9, status: S.COMPLETED },
+    { day: 2, hour: 8.4, status: S.COMPLETED },
+    { day: 2, hour: 10.2, status: S.COMPLETED },
+    // Yesterday → today's runs.
+    { day: 1, hour: 7.1, status: S.COMPLETED, slot: 0, trip: "A", cod: true, who: 1 },
+    { day: 1, hour: 8.6, status: S.COMPLETED, slot: 0, trip: "A", who: 3 },
+    { day: 1, hour: 10.4, status: S.COMPLETED, slot: 0, trip: "A", cod: true, noPin: true, who: 4 },
+    { day: 1, hour: 11.2, status: S.COMPLETED, slot: 1, trip: "B", who: 2 },
+    { day: 1, hour: 12.8, status: S.READY, slot: 1, trip: "B", cod: true, who: 0 },
+    { day: 1, hour: 14.1, status: S.READY, slot: 1, trip: "B", who: 4 },
+    { day: 1, hour: 16.5, status: S.READY, slot: 1, trip: "B", cod: true, who: 3 },
+    { day: 1, hour: 17.3, status: S.PACKED, slot: 2, trip: "C", loaded: true, who: 1 },
+    { day: 1, hour: 18.2, status: S.PACKED, slot: 2, trip: "C", who: 2 },
+    { day: 1, hour: 19.0, status: S.PACKED, slot: 2, trip: "C", cod: true, who: 0 },
+    { day: 1, hour: 20.1, status: S.PACKED, slot: 2, who: 4 },
+    // Today → tomorrow morning.
+    { day: 0, hour: 6.3, status: S.CONFIRMED, slot: 0, lines: [["SQUID-PUSIT-1", 1], ["FISH-TILAPIA-W1", 2]] },
+    { day: 0, hour: 6.9, status: S.CONFIRMED, slot: 1, lines: [["FISH-BANGUS-W1", 1], ["SHELL-TAHONG-500", 2]] },
+    { day: 0, hour: 7.4, status: S.PENDING, lines: [["CRAB-ALIMANGO-1", 1], ["SHELL-HIPON-500", 1]] },
+    { day: 0, hour: 8.2, status: S.PENDING, lines: [["FISH-BANGUS-W1", 2], ["SHELL-HALAAN-1", 1]] },
+    { day: 0, hour: 8.9, status: S.PENDING, lines: [["SHELL-SUGPO-500", 1], ["SQUID-BISAYA-500", 1]] },
+  ];
+
+  type Placed = {
+    id: string;
+    code: string;
+    plan: Plan;
+    placed: Date;
+    day: Date;
+    slot: number;
+    barangay: string;
+    total: number;
+    cod: boolean;
+  };
+  const placedOrders: Placed[] = [];
 
   let orderCount = 0;
   for (const [i, plan] of plans.entries()) {
     const placed = at(plan.day, plan.hour);
     if (placed.getTime() > nowMs) continue;
-    const customer = i < 3 || plan.status === OrderStatus.PENDING ? customers[i % customers.length] : pick(customers);
+    const customer =
+      plan.who !== undefined
+        ? customers[plan.who]
+        : i < 3 || plan.status === S.PENDING
+          ? customers[i % customers.length]
+          : pick(customers);
     const lines =
       plan.lines ??
       Array.from({ length: 1 + Math.floor(rand() * 3) }, () => [pick(sellableSkus), 1 + Math.floor(rand() * 2)] as [string, number]);
@@ -214,19 +269,22 @@ async function main() {
 
     const subtotal = items.reduce((s, x) => s + x.v.price * x.q, 0);
     const fee = subtotal >= 50000 ? 0 : 5000;
-    const [address, barangay] = addresses[i % addresses.length];
-    const payment: PaymentMethod = i % 3 === 0 ? "COD" : "GCASH";
+    const cod = plan.cod ?? i % 3 === 0;
+    const slot = plan.slot ?? i % SLOTS.length;
+    const day = deliveryDateFor(placed);
 
     const order = await prisma.order.create({
       data: {
         customerId: customer.id,
         status: plan.status,
-        paymentMethod: payment,
+        paymentMethod: (cod ? "COD" : "GCASH") as PaymentMethod,
         deliveryName: customer.name ?? "Customer",
-        deliveryPhone: `0917 ${String(200 + i * 37).padStart(3, "0")} ${String(1000 + i * 413).slice(0, 4)}`,
-        deliveryAddress: address,
-        deliveryBarangay: barangay,
-        deliverySlot: slots[i % slots.length],
+        deliveryPhone: customer.phone ?? "0917 200 0000",
+        deliveryAddress: customer.address ?? "Blk 1 Lot 1",
+        deliveryBarangay: customer.barangay ?? "Zone I",
+        deliverySlot: SLOTS[slot],
+        deliveryDate: day,
+        handoffPin: pin(),
         deliveryFeeCentavos: fee,
         totalCentavos: subtotal + fee,
         createdAt: placed,
@@ -239,24 +297,121 @@ async function main() {
     // Placing an order takes its stock off the shelf.
     for (const x of items) await move(x.v, -x.q, `Sale — ${code}`, placed, { orderId: order.id });
 
-    // Timeline up to the order's current status.
     await prisma.orderStatusEvent.create({
-      data: { orderId: order.id, toStatus: OrderStatus.PENDING, actorId: customer.id, note: "Placed online", createdAt: placed },
+      data: { orderId: order.id, toStatus: S.PENDING, actorId: customer.id, note: "Placed online", createdAt: placed },
     });
-    const target = plan.status === OrderStatus.CANCELLED ? OrderStatus.PENDING : plan.status;
-    let t = placed.getTime();
-    for (let s = 1; s <= flow.indexOf(target); s++) {
-      t += (0.4 + rand() * 1.4) * HOUR;
-      await prisma.orderStatusEvent.create({
-        data: { orderId: order.id, fromStatus: flow[s - 1], toStatus: flow[s], actorId: pick(staff).id, createdAt: new Date(Math.min(t, nowMs - 60_000)) },
-      });
-    }
-    if (plan.status === OrderStatus.CANCELLED) {
+    if (plan.status === S.CANCELLED) {
       const when = new Date(placed.getTime() + 0.6 * HOUR);
       for (const x of items) await move(x.v, x.q, `Cancelled — ${code} (back to stock)`, when, { orderId: order.id, actorId: admin.id });
       await prisma.orderStatusEvent.create({
-        data: { orderId: order.id, fromStatus: OrderStatus.PENDING, toStatus: OrderStatus.CANCELLED, actorId: admin.id, note: plan.cancelNote, createdAt: when },
+        data: { orderId: order.id, fromStatus: S.PENDING, toStatus: S.CANCELLED, actorId: admin.id, note: plan.cancelNote, createdAt: when },
       });
+      continue;
+    }
+    if (plan.status !== S.PENDING) {
+      await prisma.orderStatusEvent.create({
+        data: {
+          orderId: order.id,
+          fromStatus: S.PENDING,
+          toStatus: S.CONFIRMED,
+          actorId: pick(staff).id,
+          createdAt: past(new Date(placed.getTime() + (0.3 + rand()) * HOUR), 30),
+        },
+      });
+    }
+    placedOrders.push({
+      id: order.id,
+      code,
+      plan,
+      placed,
+      day,
+      slot,
+      barangay: order.deliveryBarangay,
+      total: order.totalCentavos,
+      cod,
+    });
+  }
+
+  // Packing: everything at Packed or beyond was packed at 5 AM on its day.
+  const beyondConfirmed = new Set<OrderStatus>([S.PACKED, S.READY, S.COMPLETED]);
+  for (const o of placedOrders.filter(p => beyondConfirmed.has(p.plan.status))) {
+    await prisma.orderStatusEvent.create({
+      data: { orderId: o.id, fromStatus: S.CONFIRMED, toStatus: S.PACKED, actorId: packer.id, createdAt: past(onDay(o.day, 5 + rand() * 0.5), 20) },
+    });
+  }
+
+  // Trips: last week's deliveries grouped by day and slot, then today's A/B/C.
+  type TripPlan = { key: string; day: Date; slot: number; stops: Placed[]; status: "PLANNED" | "OUT" | "RETURNED" | "REMITTED" };
+  const tripPlans = new Map<string, TripPlan>();
+  for (const o of placedOrders) {
+    if (o.plan.trip) {
+      const status = o.plan.trip === "A" ? "RETURNED" : o.plan.trip === "B" ? "OUT" : "PLANNED";
+      const key = `demo-${o.plan.trip}`;
+      if (!tripPlans.has(key)) tripPlans.set(key, { key, day: o.day, slot: o.slot, stops: [], status });
+      tripPlans.get(key)!.stops.push(o);
+    } else if (o.plan.status === S.COMPLETED) {
+      const key = `${o.day.toISOString()}|${o.slot}`;
+      if (!tripPlans.has(key)) tripPlans.set(key, { key, day: o.day, slot: o.slot, stops: [], status: "REMITTED" });
+      tripPlans.get(key)!.stops.push(o);
+    }
+  }
+  const sortedTrips = [...tripPlans.values()].sort((a, b) => a.day.getTime() - b.day.getTime() || a.slot - b.slot);
+  let tripCount = 0;
+  for (const [n, tp] of sortedTrips.entries()) {
+    const driver = tp.key === "demo-C" ? driver2 : n % 3 === 2 ? driver2 : driver1;
+    const vehicle = driver === driver2 ? "Motorbike 1" : "Truck 1";
+    const leave = onDay(tp.day, SLOT_START[tp.slot] - 0.25);
+    const stops = tp.stops.sort((a, b) => routeRank(a.barangay) - routeRank(b.barangay) || a.placed.getTime() - b.placed.getTime());
+    const doneAt = (i: number) => new Date(leave.getTime() + (i + 1) * 0.35 * HOUR);
+    const left = tp.status !== "PLANNED";
+    const back = tp.status === "RETURNED" || tp.status === "REMITTED" ? past(doneAt(stops.length), 15) : null;
+    const cash = stops.filter(s => s.cod && s.plan.status === S.COMPLETED).reduce((sum, s) => sum + s.total, 0);
+    const trip = await prisma.trip.create({
+      data: {
+        date: tp.day,
+        slot: SLOTS[tp.slot],
+        vehicle,
+        driverId: driver.id,
+        status: tp.status,
+        departedAt: left ? past(leave, 40) : null,
+        returnedAt: back,
+        ...(tp.status === "REMITTED" && back
+          ? { cashRemittedCentavos: cash, remitConfirmedById: admin.id, remittedAt: past(new Date(back.getTime() + 0.25 * HOUR), 10) }
+          : {}),
+      },
+    });
+    tripCount++;
+    const tripCode = `T-${String(trip.tripNumber).padStart(3, "0")}`;
+    for (const [i, s] of stops.entries()) {
+      const loaded = left || s.plan.loaded;
+      await prisma.order.update({
+        where: { id: s.id },
+        data: { tripId: trip.id, stopIndex: i + 1, loadedAt: loaded ? past(new Date(leave.getTime() - 0.3 * HOUR), 30) : null },
+      });
+      if (!left) continue;
+      await prisma.orderStatusEvent.create({
+        data: {
+          orderId: s.id,
+          fromStatus: S.PACKED,
+          toStatus: S.READY,
+          actorId: driver.id,
+          note: `On the truck · ${tripCode} stop ${i + 1} of ${stops.length}`,
+          createdAt: past(leave, 40),
+        },
+      });
+      if (s.plan.status === S.COMPLETED) {
+        const how = s.plan.noPin ? `No PIN: ${pick(["Received by a household member", "Customer couldn't open their PIN"])} · received by ${pick(["Lola Nena (grandmother)", "Ate Joy (sister)", "Kuya Ben (husband)"])}` : "PIN verified";
+        await prisma.orderStatusEvent.create({
+          data: {
+            orderId: s.id,
+            fromStatus: S.READY,
+            toStatus: S.COMPLETED,
+            actorId: driver.id,
+            note: `${how}${s.cod ? ` · COD ${fmtPeso(s.total)} collected` : ""}`,
+            createdAt: past(doneAt(i), 20),
+          },
+        });
+      }
     }
   }
 
@@ -309,9 +464,12 @@ async function main() {
   console.log(`  Products:   ${productCount}`);
   console.log(`  Variants:   ${variants.length}`);
   console.log(`  Orders:     ${orderCount}`);
+  console.log(`  Trips:      ${tripCount}`);
   console.log("\nDemo accounts:");
   console.log("  ADMIN     admin@hookandbox.ph / admin123");
   console.log("  ADMIN     clerk@hookandbox.ph / clerk123");
+  console.log("  PACKER    packer@hookandbox.ph / packer123");
+  console.log("  DRIVER    driver@hookandbox.ph / driver123 (also driver2@)");
   console.log("  CUSTOMER  maria@example.com / customer123");
 }
 

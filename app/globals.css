@@ -210,3 +210,34 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     print-color-adjust: exact;
   }
 }
+
+/* Bag labels: 4×6 in (100×150 mm) thermal stock, one label per page, black
+   only. The sheet is invisible on screen; components/staff/PrintLabels.tsx
+   mounts it and opens the print dialog. A named page keeps the receipt's
+   default page size untouched. */
+@page bag-label {
+  size: 100mm 150mm;
+  margin: 0;
+}
+
+.label-sheet {
+  display: none;
+}
+
+@media print {
+  .label-sheet {
+    display: block;
+  }
+
+  .bag-label {
+    page: bag-label;
+    break-after: page;
+    width: 100mm;
+    height: 150mm;
+    overflow: hidden;
+  }
+
+  .bag-label:last-child {
+    break-after: auto;
+  }
+}

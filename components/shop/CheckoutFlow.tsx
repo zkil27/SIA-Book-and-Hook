@@ -12,21 +12,35 @@ import { ReceiptSlip } from "./ReceiptSlip";
 import { placeOrder } from "@/lib/actions/checkout";
 import { DELIVERY_SLOTS, type DeliveryContact } from "@/lib/meta";
 import { deliveryFeeFor, peso } from "@/lib/money";
+import type { SlotAvailability } from "@/lib/orders";
+import { fmtDay, fmtLongDay } from "@/lib/time";
 import { Button, ButtonLink, Field, Input, buttonClass } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 
 const STEPS = ["Review", "Delivery", "Payment", "Receipt"] as const;
 
 type Delivery = DeliveryContact & { name: string; slot: (typeof DELIVERY_SLOTS)[number] };
-type Receipt = { code: string; total: number; items: BasketItem[]; payment: "GCASH" | "COD"; slot: string; fee: number };
+type Receipt = { code: string; total: number; items: BasketItem[]; payment: "GCASH" | "COD"; slot: string; day: string; fee: number };
 
-function validate(d: Delivery): Partial<Record<keyof Delivery, string>> {
+function validate(d: Delivery, availability: SlotAvailability | null): Partial<Record<keyof Delivery, string>> {
   const e: Partial<Record<keyof Delivery, string>> = validateContact(d);
   if (d.name.trim().length < 2) e.name = "Enter the name of the person receiving the order.";
+  if (availability?.slots.find(s => s.slot === d.slot)?.left === 0) e.slot = "That slot is full. Pick another one.";
   return e;
 }
 
-export function CheckoutFlow({ defaultName, saved, offline }: { defaultName: string; saved: DeliveryContact | null; offline: boolean }) {
+export function CheckoutFlow({
+  defaultName,
+  saved,
+  offline,
+  availability,
+}: {
+  defaultName: string;
+  saved: DeliveryContact | null;
+  offline: boolean;
+  /** Places left per slot for the delivery day; null when it couldn't be read. */
+  availability: SlotAvailability | null;
+}) {
   const basket = useBasket();
   const toast = useToast();
   const reduce = useReducedMotion();
@@ -37,7 +51,8 @@ export function CheckoutFlow({ defaultName, saved, offline }: { defaultName: str
     phone: saved?.phone ?? "",
     address: saved?.address ?? "",
     barangay: saved?.barangay ?? "",
-    slot: DELIVERY_SLOTS[0],
+    // First slot with room; the server re-checks when the order is placed.
+    slot: (availability?.slots.find(s => s.left > 0)?.slot as Delivery["slot"] | undefined) ?? DELIVERY_SLOTS[0],
   });
   const [errors, setErrors] = useState<Partial<Record<keyof Delivery, string>>>({});
   // Ticked for a first save; off once details exist, so a one-off order can't replace them.
@@ -87,7 +102,15 @@ export function CheckoutFlow({ defaultName, saved, offline }: { defaultName: str
         toast({ title: "We couldn't place your order", description: res.error, tone: "error", duration: 7000 });
         return;
       }
-      setReceipt({ code: res.data.code, total: res.data.total, items: basket.items, payment, slot: delivery.slot, fee });
+      setReceipt({
+        code: res.data.code,
+        total: res.data.total,
+        items: basket.items,
+        payment,
+        slot: delivery.slot,
+        day: res.data.deliveryDay,
+        fee,
+      });
       basket.clear();
       go(3);
     });
@@ -173,20 +196,59 @@ export function CheckoutFlow({ defaultName, saved, offline }: { defaultName: str
                     <DeliveryFields idPrefix="d" value={delivery} errors={errors} onChange={patch => setDelivery({ ...delivery, ...patch })} />
                   </div>
                   <fieldset className="mt-6">
-                    <legend className="text-[13px] font-semibold text-ink-2">Morning delivery slot</legend>
+                    <legend className="text-[13px] font-semibold text-ink-2">
+                      Morning delivery slot
+                      {availability && <span className="font-normal text-ink-3"> · {fmtLongDay(availability.day)}</span>}
+                    </legend>
                     <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                      {DELIVERY_SLOTS.map(s => (
-                        <label
-                          key={s}
-                          className={`flex cursor-pointer items-center justify-center rounded-xl px-3 py-3 text-sm font-semibold ring-inset transition-[box-shadow,background-color] ${
-                            delivery.slot === s ? "bg-mint-soft text-teal-ink ring-2 ring-teal-deep" : "bg-ice text-ink-2 ring-1 ring-ice-3 hover:ring-ink-3"
-                          }`}
-                        >
-                          <input type="radio" name="slot" value={s} className="sr-only" checked={delivery.slot === s} onChange={() => setDelivery({ ...delivery, slot: s })} />
-                          {s}
-                        </label>
-                      ))}
+                      {DELIVERY_SLOTS.map(s => {
+                        const left = availability?.slots.find(x => x.slot === s)?.left ?? null;
+                        const full = left === 0;
+                        const on = delivery.slot === s;
+                        return (
+                          <label
+                            key={s}
+                            className={`flex flex-col items-center justify-center rounded-xl px-3 py-2.5 text-sm font-semibold ring-inset transition-[box-shadow,background-color] ${
+                              full
+                                ? "cursor-not-allowed bg-ice-2 text-ink-3 ring-1 ring-ice-3"
+                                : on
+                                  ? "cursor-pointer bg-mint-soft text-teal-ink ring-2 ring-teal-deep"
+                                  : "cursor-pointer bg-ice text-ink-2 ring-1 ring-ice-3 hover:ring-ink-3"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="slot"
+                              value={s}
+                              className="sr-only"
+                              checked={on}
+                              disabled={full}
+                              onChange={() => setDelivery({ ...delivery, slot: s })}
+                            />
+                            <span className={full ? "line-through decoration-2" : ""}>{s}</span>
+                            {left !== null && (
+                              <span
+                                className={`tabular text-[12px] font-medium ${
+                                  full ? "text-marker-deep" : left <= 3 ? "text-[#8a6100]" : "text-ink-3"
+                                }`}
+                              >
+                                {full ? "Full" : `${left} left`}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
+                    {errors.slot && (
+                      <p className="mt-2 text-[13px] font-medium text-marker-deep" role="alert">
+                        {errors.slot}
+                      </p>
+                    )}
+                    {availability && availability.slots.every(x => x.left === 0) && (
+                      <p className="mt-2 text-[13px] text-ink-2">
+                        Every slot for {fmtDay(availability.day)} is booked. Please check back after the 9 PM cut-off.
+                      </p>
+                    )}
                   </fieldset>
                   {differsFromSaved && (
                     <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl bg-ice p-3.5 ring-1 ring-inset ring-ice-3">
@@ -204,7 +266,7 @@ export function CheckoutFlow({ defaultName, saved, offline }: { defaultName: str
                   <StepNav
                     back={() => go(0)}
                     next={() => {
-                      const e = validate(delivery);
+                      const e = validate(delivery, availability);
                       setErrors(e);
                       if (Object.keys(e).length === 0) go(2);
                     }}
@@ -218,8 +280,8 @@ export function CheckoutFlow({ defaultName, saved, offline }: { defaultName: str
                   <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Payment method">
                     {(
                       [
-                        { id: "GCASH", title: "GCash", desc: "Send to our GCash number, then show the reference to the rider.", icon: Smartphone },
-                        { id: "COD", title: "Cash on delivery", desc: "Pay the rider in cash when your box arrives.", icon: Banknote },
+                        { id: "GCASH", title: "GCash", desc: "Send to our GCash number, then show the reference to the driver.", icon: Smartphone },
+                        { id: "COD", title: "Cash on delivery", desc: "Pay the driver in cash when your box arrives.", icon: Banknote },
                       ] as const
                     ).map(m => {
                       const on = payment === m.id;
@@ -293,7 +355,7 @@ export function CheckoutFlow({ defaultName, saved, offline }: { defaultName: str
                     )}
                     {payment === "COD" && (
                       <motion.p key="cod" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="mt-4 overflow-hidden rounded-xl bg-paper p-4 text-sm text-ink-2 ring-1 ring-inset ring-ice-3">
-                        Please have <strong className="tabular text-ink">{peso(basket.subtotal + fee)}</strong> ready for the rider.
+                        Please have <strong className="tabular text-ink">{peso(basket.subtotal + fee)}</strong> ready for the driver.
                       </motion.p>
                     )}
                   </AnimatePresence>
@@ -385,11 +447,13 @@ function OrderPlaced({ receipt }: { receipt: Receipt }) {
         total={receipt.total}
         payment={receipt.payment}
         slot={receipt.slot}
+        day={receipt.day}
         status="PENDING"
         animated
       />
       <p className="mt-6 max-w-sm text-center text-sm text-ink-2">
-        We&apos;ll confirm your order before packing. Keep your code to check its status anytime.
+        We&apos;ll confirm your order before packing. Once it&apos;s packed, your account shows a 4-digit PIN: tell it to
+        the driver at the door.
       </p>
       <div className="mt-5 flex flex-wrap justify-center gap-3">
         <ButtonLink href={`/track?code=${receipt.code}`}>Track this order</ButtonLink>

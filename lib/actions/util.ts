@@ -47,21 +47,24 @@ export class UserError extends Error {}
  * - "admin":  every /admin page (the admin layout's badges included)
  * - "orders": the customer's order views (/track, /account)
  * - "shop":   storefront pages that show stock or price
+ * - "staff":  the packing, loading and trip screens under /staff
  * In a server action this also re-renders the page the user is on when it is
  * one of these paths.
  */
-export type Area = "admin" | "orders" | "shop";
+export type Area = "admin" | "orders" | "shop" | "staff";
 
 export function invalidate(...areas: Area[]) {
   const set = new Set(areas);
   if (set.has("admin")) revalidatePath("/admin", "layout");
+  if (set.has("staff")) revalidatePath("/staff", "layout");
   if (set.has("orders")) {
     revalidatePath("/track");
     revalidatePath("/account");
   }
   if (set.has("shop")) {
+    // Not /checkout: the place-order action runs there and the client already
+    // shows the receipt, so re-rendering it only delayed the response.
     revalidatePath("/", "page");
     revalidatePath("/p/[id]", "page");
-    revalidatePath("/checkout");
   }
 }

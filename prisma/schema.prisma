@@ -5,20 +5,34 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Nested reads (order → items → variant → product) load in one SQL
+  // statement when a query passes relationLoadStrategy: "join".
+  previewFeatures = ["relationJoins"]
 }
 
 enum Role {
   CUSTOMER
   ADMIN
+  PACKER // packs confirmed orders and loads the truck; no admin access
+  DRIVER // runs delivery trips; no admin access
 }
 
 enum OrderStatus {
   PENDING
   CONFIRMED
-  READY
+  PACKED // packed and waiting for the truck
+  READY // on the truck (a trip that has left the stall)
   COMPLETED
   CANCELLED
+}
+
+// A delivery trip: one vehicle and driver running one morning slot's stops.
+enum TripStatus {
+  PLANNED // drafted by the office, being loaded
+  OUT // left the stall
+  RETURNED // back at the stall, cash not yet confirmed
+  REMITTED // the office confirmed the cash handed in
 }
 
 enum PaymentMethod {
@@ -36,9 +50,11 @@ model User {
   phone          String?
   address        String?
   barangay       String?
-  orders         Order[]
+  orders         Order[]            @relation("CustomerOrders")
   stockMovements StockMovement[] // movements this staff member recorded
   statusEvents   OrderStatusEvent[] // status changes this staff member made
+  trips          Trip[]             @relation("DriverTrips") // trips this driver ran
+  remitsTaken    Trip[]             @relation("RemitConfirmations") // trip cash this admin confirmed
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 }
@@ -95,6 +111,7 @@ model StockMovement {
   createdAt DateTime       @default(now()) // Append-only ledger
 
   @@index([variantId, createdAt])
+  @@index([variantId, quantity]) // covering index: stock = SUM(quantity) per variant, read from the index alone
   @@index([orderId]) // an order's movements (cancel returns exactly what it holds)
 }
 
@@ -102,7 +119,7 @@ model Order {
   id                  String             @id @default(cuid())
   orderNumber         Int                @unique @default(autoincrement()) // Shown as "HB-0005"
   customerId          String
-  customer            User               @relation(fields: [customerId], references: [id])
+  customer            User               @relation("CustomerOrders", fields: [customerId], references: [id])
   status              OrderStatus        @default(PENDING)
   paymentMethod       PaymentMethod
   deliveryName        String
@@ -110,16 +127,51 @@ model Order {
   deliveryAddress     String
   deliveryBarangay    String
   deliverySlot        String // e.g. "6:00–8:00 AM"
+  deliveryDate        DateTime?          @db.Date // Manila calendar day of the slot; null only on very old rows
   deliveryFeeCentavos Int                @default(0)
   totalCentavos       Int // Items + delivery fee, in centavos
   items               OrderItem[]
   statusEvents        OrderStatusEvent[]
   stockMovements      StockMovement[]
+  tripId              String? // the trip carrying it (set while planned, kept once delivered)
+  trip                Trip?              @relation(fields: [tripId], references: [id])
+  stopIndex           Int? // position on the trip's route, 1 = first stop
+  loadedAt            DateTime? // ticked onto the truck during loading
+  handoffPin          String? // 4 digits shown only to the customer; the driver enters it at the door
+  pinAttempts         Int                @default(0) // wrong PIN entries; 5 locks the PIN
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 
   @@index([status, createdAt]) // admin tabs, dashboard, pending counts
+  @@index([createdAt]) // the "All" tab and week totals, which span every status
   @@index([customerId, createdAt]) // a customer's order history
+  @@index([deliveryDate, deliverySlot, status]) // slot capacity and dispatch drafting
+  @@index([tripId, stopIndex]) // a trip's stops in route order
+}
+
+model Trip {
+  id                   String     @id @default(cuid())
+  tripNumber           Int        @unique @default(autoincrement()) // Shown as "T-012"
+  date                 DateTime   @db.Date // delivery day (Manila)
+  slot                 String // one of DELIVERY_SLOTS
+  vehicle              String // label only, e.g. "Truck 1"
+  status               TripStatus @default(PLANNED)
+  driverId             String?
+  driver               User?      @relation("DriverTrips", fields: [driverId], references: [id])
+  departedAt           DateTime?
+  returnedAt           DateTime?
+  cashRemittedCentavos Int? // COD cash the office counted on return
+  remitNote            String? // required when the cash doesn't match
+  remitConfirmedById   String?
+  remitConfirmedBy     User?      @relation("RemitConfirmations", fields: [remitConfirmedById], references: [id])
+  remittedAt           DateTime?
+  orders               Order[]
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  @@index([date, slot])
+  @@index([driverId, date])
+  @@index([status])
 }
 
 model OrderItem {
@@ -148,4 +200,5 @@ model OrderStatusEvent {
   createdAt  DateTime     @default(now())
 
   @@index([orderId, createdAt])
+  @@index([toStatus, createdAt]) // dashboard "delivered without a PIN" and delivery times
 }

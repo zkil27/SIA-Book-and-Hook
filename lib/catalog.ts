@@ -5,7 +5,6 @@ import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { CATALOG, dishesForName, imageForName, type Dish } from "@/lib/catalog-data";
 import { categoriesOf, staticCatalogProducts } from "@/lib/catalog-fixture";
-import { stockByVariant } from "@/lib/stock-sql";
 import { startOfShopDay } from "@/lib/time";
 
 /**
@@ -90,6 +89,7 @@ const sellableWhere = { active: true, variants: { some: { active: true } } } sat
 export async function loadCatalogFromDb(): Promise<ShopProduct[]> {
   const [rows, sums] = await Promise.all([
     prisma.product.findMany({
+      relationLoadStrategy: "join", // product + category + variants in one statement
       where: sellableWhere,
       select: shopProductSelect,
       orderBy: [{ category: { name: "asc" } }, { name: "asc" }],
@@ -133,12 +133,14 @@ export const getShopProduct = cache(
   async (id: string): Promise<{ product: ShopProduct | null; offline: boolean }> => {
     await connection();
     try {
-      const row = await prisma.product.findFirst({ where: { id, ...sellableWhere }, select: shopProductSelect });
+      // Product and its stock in parallel: the stock sum filters by product id
+      // instead of waiting for the variant ids.
+      const [row, sums] = await Promise.all([
+        prisma.product.findFirst({ relationLoadStrategy: "join", where: { id, ...sellableWhere }, select: shopProductSelect }),
+        prisma.stockMovement.groupBy({ by: ["variantId"], where: { variant: { productId: id } }, _sum: { quantity: true } }),
+      ]);
       if (!row) return { product: null, offline: false };
-      const stock = await stockByVariant(
-        prisma,
-        row.variants.map(v => v.id)
-      );
+      const stock = new Map(sums.map(s => [s.variantId, s._sum.quantity ?? 0]));
       return { product: shapeShopProduct(row, stock, startOfShopDay()), offline: false };
     } catch (err) {
       warnOffline(err);
