@@ -12,7 +12,7 @@ import {
   type OrderStatusKey,
   type TripStatusKey,
 } from "@/lib/meta";
-import { addDays, dayKey, deliveryDateFor, shopDate } from "@/lib/time";
+import { addDays, dayKey, deliveryDateFor, shopDate, startOfShopDay } from "@/lib/time";
 
 /**
  * Reads for the packing, loading, trip and dispatch screens.
@@ -201,7 +201,6 @@ export type TripView = {
   driver: { id: string; name: string } | null;
   departedAt: string | null;
   returnedAt: string | null;
-  remit: { received: number; note: string | null; by: string; at: string } | null;
   stops: Stop[];
   /** COD cash the driver collected on delivered stops. */
   cashCollected: number;
@@ -211,7 +210,6 @@ export type TripView = {
 
 const tripInclude = {
   driver: { select: { id: true, name: true, email: true } },
-  remitConfirmedBy: { select: { name: true, email: true } },
   orders: {
     orderBy: [{ stopIndex: "asc" as const }, { createdAt: "asc" as const }],
     select: {
@@ -276,15 +274,6 @@ function shapeTrip(t: TripRow, withContact: boolean): TripView {
     driver: t.driver ? { id: t.driver.id, name: t.driver.name ?? t.driver.email } : null,
     departedAt: t.departedAt?.toISOString() ?? null,
     returnedAt: t.returnedAt?.toISOString() ?? null,
-    remit:
-      t.status === "REMITTED" && t.cashRemittedCentavos !== null && t.remittedAt
-        ? {
-            received: t.cashRemittedCentavos,
-            note: t.remitNote,
-            by: t.remitConfirmedBy?.name ?? t.remitConfirmedBy?.email ?? "Office",
-            at: t.remittedAt.toISOString(),
-          }
-        : null,
     stops,
     cashCollected: stops.filter(s => s.status === "COMPLETED").reduce((s, x) => s + cod(x), 0),
     cashToCollect: stops.filter(s => s.status === "READY").reduce((s, x) => s + cod(x), 0),
@@ -315,9 +304,8 @@ export async function tripsToLoad(driverId: string | null = null): Promise<TripV
 }
 
 /**
- * A driver's trips: being loaded (from yesterday on), on the road, back with
- * cash to hand in, and today's closed ones so the driver sees the cash was
- * confirmed. An admin sees everyone's.
+ * A driver's trips: being loaded (from yesterday on), on the road, and today's
+ * closed trips. An admin sees everyone's.
  */
 export async function openTripsFor(driverId: string | null): Promise<TripView[]> {
   const today = shopDate();
@@ -327,8 +315,8 @@ export async function openTripsFor(driverId: string | null): Promise<TripView[]>
       ...(driverId ? { driverId } : {}),
       OR: [
         { status: "PLANNED", date: { gte: addDays(today, -1) } },
-        { status: { in: ["OUT", "RETURNED"] } },
-        { status: "REMITTED", remittedAt: { gte: today } },
+        { status: "OUT" },
+        { status: { in: ["RETURNED", "REMITTED"] }, returnedAt: { gte: startOfShopDay() } },
       ],
     },
     include: tripInclude,
@@ -390,8 +378,8 @@ export async function dispatchBoard(): Promise<{ days: DispatchDay[]; drivers: {
     }),
     prisma.trip.findMany({
       ...JOIN,
-      // Open trips from any day (cash may still be owed), closed ones from today.
-      where: { OR: [{ status: { not: "REMITTED" } }, { date: { gte: today } }] },
+      // Open trips from any day, closed ones from today on.
+      where: { OR: [{ status: { in: ["PLANNED", "OUT"] } }, { date: { gte: today } }] },
       include: tripInclude,
       orderBy: { tripNumber: "asc" },
       take: 100,
@@ -441,18 +429,6 @@ export async function dispatchBoard(): Promise<{ days: DispatchDay[]; drivers: {
       .map(([day, m]) => ({ day, slots: [...m.values()].sort((a, b) => slotRank(a.slot) - slotRank(b.slot)) })),
     drivers: drivers.map(d => ({ id: d.id, name: d.name ?? d.email })),
   };
-}
-
-/** Trips back at the stall whose cash the office hasn't confirmed (inbox). */
-export async function tripsAwaitingCash() {
-  const rows = await prisma.trip.findMany({
-    ...JOIN,
-    where: { status: "RETURNED" },
-    include: tripInclude,
-    orderBy: { returnedAt: "asc" },
-    take: 10,
-  });
-  return rows.map(r => shapeTrip(r, false));
 }
 
 // ── Customer-facing stop position ────────────────────────────────────────────

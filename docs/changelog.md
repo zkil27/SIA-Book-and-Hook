@@ -5,6 +5,29 @@ Every change an AI agent makes to this repository is recorded here, per the
 
 Each entry follows: **Date — summary**, then What / Why / Impact.
 
+## 2026-11-21 — Payment-aware sales, compact waybill, auto-close trips & admin automations
+
+**What:**
+- **Payment-aware revenue recognition** (`lib/admin-data.ts`, `lib/meta.ts`, `app/(admin)/admin/page.tsx`, `components/admin/TodayParts.tsx`, `components/admin/OrdersBoard.tsx`):
+  - **Sales today**, **Sales, last 7 days**, and **Top sellers this week** now count only **collected** sales: **GCash** counts on confirmation (`CONFIRMED` onward, attributed to the confirm date) and **COD** counts only on delivery (`COMPLETED`, attributed to the delivery date).
+  - Unconfirmed GCash orders show as **GCash · On hold** (with live total under `Sales today`); active COD orders show as **COD · On delivery**.
+- **Compact 4×6 bag waybill** (`components/staff/BagLabel.tsx`):
+  - Removed the `MAX_LINES = 9` cap and `+ N more on the pick list` truncation; tightened header spacing and added 3-tier adaptive density (single column up to 26 lines, 2-column grid for 27+ lines) so every line item fits on one 100×150 mm label while keeping phone, address, stop number, and handoff PIN off the label.
+- **Removed admin cash-received confirmation** (`lib/actions/trips.ts`, `lib/trips-data.ts`, `components/admin/DispatchBoard.tsx`, `app/(admin)/admin/dispatch/page.tsx`, `components/staff/TripRun.tsx`, `app/(staff)/staff/trip/page.tsx`, `lib/admin-data.ts`, `lib/meta.ts`):
+  - Deleted `confirmRemit` and `RemitForm`. When a driver taps **Back at the stall**, the trip closes immediately (`RETURNED`, labelled `Closed`), displaying read-only `COD collected` totals instead of raising an admin cash-count alert or Dispatch badge. Drivers still confirm per-stop cash at the door.
+- **Admin automation suite:**
+  - **Auto-confirm COD at checkout + packer batch printing** (`lib/orders-core.ts`, `lib/actions/checkout.ts`, `lib/actions/dev.ts`, `components/shop/CheckoutFlow.tsx`, `components/staff/PackBoard.tsx`, `components/staff/PickList.tsx`): COD orders now land directly in `CONFIRMED` (`To pack`) with an `Auto-confirmed (Cash on delivery)` timeline event; only GCash waits in `To confirm`. Packers get **Print all** / slot **Print labels** batch actions.
+  - **Auto-plan & auto-assign trips on pack** (`lib/trips-core.ts`, `lib/actions/trips.ts`, `lib/actions/admin-orders.ts`): moving an order `CONFIRMED → PACKED` automatically attaches it in `BARANGAY_ROUTE` order to an open `PLANNED` trip for its `(date, slot)` (or creates one picking the least-loaded driver and next unused vehicle) without clearing existing bags' `loadedAt` ticks. Undo/cancel detaches unloaded bags and cleans up empty planned trips.
+  - **Bulk cancel, bulk print & stale GCash detection** (`lib/actions/admin-orders.ts`, `components/admin/OrdersBoard.tsx`, `app/(admin)/admin/orders/page.tsx`, `app/(admin)/admin/page.tsx`): added `cancelOrders` (batched compensating stock returns + planned-trip cleanup), **Print labels (N)** / **Cancel (N)** in the Orders bulk bar, and `Stale` flags + 1-click **Select stale** / **Release stale** for unconfirmed GCash orders older than `STALE_GCASH_HOURS` (2h).
+- **Seed alignment** (`prisma/seed.ts`): seeded `PENDING` orders are GCash; closed seeded trips use `RETURNED` without remit fields.
+
+**Why:** Prevent uncollected GCash/COD orders from inflating `Sales today`, ensure large orders never truncate on the 4×6 thermal waybill, remove the redundant admin cash-received confirmation step, and automate routine COD confirmation, label printing, trip assignment, and stale GCash cleanup.
+
+**Impact:**
+- No Prisma schema migration required (`TripStatus.REMITTED` remains in the enum and renders identically as `Closed` alongside `RETURNED`).
+- Re-run `npx prisma db seed` if refreshing demo data so seeded pending orders and closed trips reflect the updated rules.
+- Docs updated: `changelog.md`, `project-overview.md`, `scope.md`, `data-model.md`, `AGENTS.md`.
+
 ## 2026-11-07 — "Staff screens" links only for developer accounts
 
 **What:** `components/admin/AdminShell.tsx`: the "Staff screens" group (Packing, Loading, Driver screen) in the admin sidebar and the phone "More" sheet now renders only when `isDev` (ADMIN + `DEV_EMAILS`), like the Dev tools link.

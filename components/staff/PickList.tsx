@@ -100,7 +100,9 @@ export function PickList({ order }: { order: PackOrder }) {
       setNext(res.data.next);
       toast({
         title: `${order.code} packed`,
-        description: "The bag waits at the stall for its truck.",
+        description: res.data.tripCode
+          ? `Added to ${res.data.tripCode} for loading.`
+          : "The bag waits at the stall for its truck.",
         undo: async () => {
           const r = await undoPacked(order.id);
           if (!r.ok) return toast({ title: "Couldn't undo", description: r.error, tone: "error" });
@@ -136,7 +138,7 @@ export function PickList({ order }: { order: PackOrder }) {
             onClick={() => print([labelFromPack(order)])}
             className="inline-flex h-11 items-center gap-2 rounded-lg bg-paper/80 px-3 text-[14px] font-semibold text-ink ring-1 ring-inset ring-[#b48d58] active:bg-paper"
           >
-            <Printer className="size-4" aria-hidden /> Reprint label
+            <Printer className="size-4" aria-hidden /> Print label
           </button>
         </div>
       </div>

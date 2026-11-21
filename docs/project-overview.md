@@ -70,34 +70,36 @@ can only add to it, never edit or delete. Those two phrases are worth memorizing
 | User | What they can do |
 |---|---|
 | **Customer** | Browse the catalog, filter by category, view a product's price and stock, build a shopping cart, go through checkout, track an order by its ID, reopen and print its receipt, see their own past orders, and keep one saved phone number and address that fills in checkout for them. |
-| **Admin / staff** | Everything a customer can't: add/edit products, manage categories, adjust stock (with a reason), review orders and move them on, plan delivery trips and count the cash that comes back, and see a simple dashboard. **Confirming an order prints its bag label** (4×6 in thermal label, in the browser; one or many at once; can be switched off per device and reprinted from the order). The Orders tabs read as the order's journey: **To confirm → To pack → Packed → On the truck → Delivered**, the same words as each order's status chip, and the Today page shows the same flow with counts and who acts next. |
-| **Packer** | On a phone at `/staff/pack`: one list of orders to pack in delivery order, a fold-out "What to take out" total per item for the first delivery day, and the packed bags still at the stall. Opens an order, taps each line as it goes in the bag (ticks survive a refresh), marks it **Packed**, and goes straight to the next order. Can reprint the bag label. Helps load the truck. Can't open the admin. |
-| **Driver** | On a phone with two tabs in work order, **Load** then **Deliver**: loads the truck (only their own trips), starts the trip after one confirm, then the next stop sits on top with Call, Maps and the cash to collect. Handing over is step by step: take the cash (cash orders), then type the customer's **handoff PIN** (tries left always shown), or log why there's no PIN. A dropped signal keeps what was typed and offers Try again. Brings back what couldn't be delivered. Can't open the admin. |
+| **Admin / staff** | Everything a customer can't: add/edit products, manage categories, adjust stock (with a reason), review orders (verifying GCash orders on hold, bulk printing/cancelling, releasing stale unpaid GCash holds), override trips in Dispatch when needed, and see a simple dashboard where **Sales today** reflects collected revenue (confirmed GCash and delivered COD) alongside **on hold** / **on delivery** totals. **Confirming a GCash order prints its compact 4×6 bag label** (all items fit on one label without truncation; packers can also batch-print labels on `/staff/pack`). The Orders tabs read as **To confirm → To pack → Packed → On the truck → Delivered**, matching the Today flow strip. |
+| **Packer** | On a phone at `/staff/pack`: one list of orders to pack in delivery order (COD orders land here automatically after checkout), a fold-out "What to take out" total per item for the first delivery day, batch **Print all** / slot **Print labels** buttons, and the packed bags still at the stall. Opens an order, taps each line as it goes in the bag (ticks survive a refresh), marks it **Packed** (which auto-assigns it to a trip in route order), and goes straight to the next order. Can print the bag label. Helps load the truck. Can't open the admin. |
+| **Driver** | On a phone with two tabs in work order, **Load** then **Deliver**: loads the truck (only their own trips), starts the trip after one confirm, then the next stop sits on top with Call, Maps and the cash to collect. Handing over is step by step: take the cash (cash orders), then type the customer's **handoff PIN** (tries left always shown), or log why there's no PIN. A dropped signal keeps what was typed and offers Try again. Brings back what couldn't be delivered, and tapping **Back at the stall** closes the trip immediately with a read-only COD total. Can't open the admin. |
 
 The only thing separating them is a label on their account called a **role**
 (`CUSTOMER`, `ADMIN`, `PACKER` or `DRIVER`). Anyone who opens a screen that
 isn't theirs gets bounced out, and every action checks the role again.
 
-**How delivery works (2026-11-08): the store's own truck.** Orders placed
+**How delivery works (2026-11-21): the store's own truck.** Orders placed
 before 9 PM go out the next morning in one of three slots. Each slot is one
-truck run, so checkout shows how many places are left ("3 left", "Full"). In the
-morning:
+truck run, so checkout shows how many places are left ("3 left", "Full"). COD
+orders auto-confirm to packing; GCash orders stay on hold in **To confirm**
+until verified:
 
-1. **Pack.** The packer packs each confirmed order and marks it Packed.
-2. **Dispatch.** The office drafts a trip per slot at `/admin/dispatch`: the
-   slot's packed orders, sorted along the truck's fixed barangay loop. The
-   office can reorder stops, split orders onto a second vehicle and pick the
-   driver.
+1. **Pack.** The packer batch-prints labels or opens each order, packs the bag,
+   and marks it Packed — which automatically assigns it to a planned trip for
+   that slot along the fixed barangay loop (creating a trip if needed).
+2. **Dispatch (exceptions).** `/admin/dispatch` shows the auto-planned trips;
+   the office can still reorder stops, split orders onto a second vehicle, or
+   swap drivers when needed.
 3. **Load.** Packer or driver ticks every bag onto the truck (last stop
    first). The trip can't leave until every bag is loaded.
 4. **Deliver.** The driver starts the trip; customers' trackers switch to
    "On the truck · you're stop 3 of 7". At the door the customer reads out the
    4-digit PIN from their account and the driver types it. No PIN? The driver
    picks a reason and types who received it, and the office's inbox flags it.
-   Cash-on-delivery stops need the driver to confirm the cash.
-5. **Return.** "Back at stall" works once every stop is delivered or brought
-   back. The office counts the cash against the expected total; a difference
-   needs a note.
+   Cash-on-delivery stops require the driver to confirm taking the cash.
+5. **Return.** "Back at the stall" works once every stop is delivered or brought
+   back, closing the trip immediately and displaying the read-only COD collected
+   total (no separate office cash-count confirmation step).
 
 The office can still mark an order delivered, but only with a written reason,
 and the timeline says "Office: …" so it never looks like a PIN-verified

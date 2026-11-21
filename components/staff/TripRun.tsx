@@ -61,7 +61,10 @@ export function TripRun({ trip }: { trip: TripView }) {
       if (res === "offline") return toast({ title: "No signal", description: "Try again in a moment.", tone: "error" });
       if (!res.ok) return toast({ title: "Not yet", description: res.error, tone: "error" });
       setConfirmReturn(false);
-      toast({ title: "Back at the stall", description: `Hand ${peso(trip.cashCollected)} to the office.` });
+      toast({
+        title: "Trip closed",
+        description: trip.cashCollected > 0 ? `COD collected: ${peso(trip.cashCollected)}.` : "Back at the stall.",
+      });
     });
   }
 
@@ -146,7 +149,7 @@ export function TripRun({ trip }: { trip: TripView }) {
         {out && confirmReturn ? (
           <div className="flex flex-1 flex-col gap-2">
             <p className="text-[14px] font-semibold text-ink">
-              Back at the stall? You&apos;ll hand {peso(trip.cashCollected)} to the office, and the trip closes for deliveries.
+              Back at the stall?{trip.cashCollected > 0 ? ` Total COD collected: ${peso(trip.cashCollected)}.` : ""} This closes the trip.
             </p>
             <div className="flex gap-2">
               <Button size="lg" variant="outline" className="h-14 text-[16px]" onClick={() => setConfirmReturn(false)} disabled={returning}>
@@ -180,14 +183,15 @@ export function TripRun({ trip }: { trip: TripView }) {
                   Back at the stall
                 </Button>
               ))}
-            {trip.status === "RETURNED" && (
-              <p className="shrink-0 rounded-lg bg-tarp px-3 py-2 text-[14px] font-bold text-ink">Hand {peso(trip.cashCollected)} to the office</p>
-            )}
-            {trip.status === "REMITTED" && trip.remit && (
+            {(trip.status === "RETURNED" || trip.status === "REMITTED") && (
               <p className="shrink-0 text-right text-[13px] text-ink-2">
-                Cash confirmed
-                <br />
-                <strong className="tabular text-ink">{peso(trip.remit.received)}</strong> by {trip.remit.by}
+                Trip closed
+                {trip.cashCollected > 0 && (
+                  <>
+                    <br />
+                    <strong className="tabular text-ink">{peso(trip.cashCollected)} COD</strong>
+                  </>
+                )}
               </p>
             )}
           </>

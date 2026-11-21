@@ -1,7 +1,7 @@
 "use server";
 
 import { getUser } from "@/lib/session";
-import { parseOrderCode } from "@/lib/meta";
+import { parseOrderCode, type OrderStatusKey } from "@/lib/meta";
 import { dayKey } from "@/lib/time";
 import { cancelOrderTx, createOrderTx, PlaceOrderSchema, type PlaceOrderData } from "@/lib/orders-core";
 import { dbError, fail, ok, invalidate, serializable, UserError, type ActionResult } from "./util";
@@ -18,7 +18,7 @@ export type PlaceOrderInput = PlaceOrderData & { saveDetails?: boolean };
  */
 export async function placeOrder(
   input: PlaceOrderInput
-): Promise<ActionResult<{ code: string; total: number; deliveryDay: string }>> {
+): Promise<ActionResult<{ code: string; total: number; deliveryDay: string; status: OrderStatusKey }>> {
   const user = await getUser();
   if (!user) return fail("Please sign in to place your order.");
 
@@ -26,7 +26,7 @@ export async function placeOrder(
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Check your order details.");
 
   try {
-    const { code, total, deliveryDate } = await serializable(async tx => {
+    const { code, total, deliveryDate, status } = await serializable(async tx => {
       const placed = await createOrderTx(tx, user.id, parsed.data);
       if (input.saveDetails === true) {
         const { phone, address, barangay } = parsed.data.delivery;
@@ -34,8 +34,8 @@ export async function placeOrder(
       }
       return placed;
     });
-    invalidate("shop", "orders", "admin");
-    return ok({ code, total, deliveryDay: dayKey(deliveryDate) });
+    invalidate("shop", "orders", "admin", "staff");
+    return ok({ code, total, deliveryDay: dayKey(deliveryDate), status });
   } catch (err) {
     if (err instanceof UserError) return fail(err.message);
     return dbError(err);

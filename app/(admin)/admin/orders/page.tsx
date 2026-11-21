@@ -35,7 +35,7 @@ export default async function OrdersPage(props: PageProps<"/admin/orders">) {
     <>
       <PageHeader
         title="Orders"
-        sub="Confirm new orders (that prints the bag label), the packer packs them, Dispatch puts packed bags on a trip, the driver delivers. Every step is logged on the order's timeline."
+        sub="COD orders confirm automatically to packing; GCash orders wait here on hold until verified. Confirming prints the bag label, packing assigns a trip, and drivers deliver with the PIN."
       />
       <Suspense>
         <OrdersBoard orders={orders} counts={counts} status={status} openCode={openCode} />

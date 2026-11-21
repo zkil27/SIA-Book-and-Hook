@@ -141,7 +141,7 @@ export async function placeTestOrders(count: number): Promise<ActionResult<TestO
         failed.push(err instanceof UserError ? err.message : errorLabel(err));
       }
     }
-    invalidate("admin", "shop", "orders");
+    invalidate("admin", "shop", "orders", "staff");
     return ok({ placed, failed, ms: Date.now() - started });
   } catch (err) {
     return dbError(err);
@@ -224,7 +224,7 @@ export async function morningRush(count: number, contention: boolean): Promise<A
     }
     const after = target ? (await stockByVariant(prisma, [target.id])).get(target.id) ?? 0 : 0;
 
-    invalidate("admin", "shop", "orders");
+    invalidate("admin", "shop", "orders", "staff");
     return ok({
       attempted: plans.length,
       placed,
@@ -267,7 +267,7 @@ export async function cleanUpTestOrders(): Promise<ActionResult<{ cancelled: str
       if (code === null) skipped++;
       else cancelled.push(orderCode(code));
     }
-    invalidate("admin", "shop", "orders");
+    invalidate("admin", "shop", "orders", "staff");
     return ok({ cancelled, skipped });
   } catch (err) {
     return dbError(err);

@@ -5,8 +5,17 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
 import { DELIVERY_SLOTS, orderCode, PIN_MAX_TRIES, routeRank, slotRank, tripCode } from "@/lib/meta";
-import { parsePesoInput, peso } from "@/lib/money";
+import { peso } from "@/lib/money";
 import { parseDayKey } from "@/lib/time";
+import {
+  assignOrdersToTrip,
+  autoAssignPackedOrdersTx,
+  changedStops,
+  cleanupEmptyTripTx,
+  renumberTripTx,
+  setStopNumbers,
+  stopsOf,
+} from "@/lib/trips-core";
 import { dbError, fail, ok, invalidate, serializable, UserError, type ActionResult, type Area } from "./util";
 
 /**
@@ -44,13 +53,14 @@ async function run<T>(work: () => Promise<T>, areas: Area[] = STAFF_AREAS): Prom
 // ── Packing ──────────────────────────────────────────────────────────────────
 
 /**
- * Confirmed → Packed. Returns the next order waiting to be packed (earliest
- * delivery day and slot, then oldest), so the packer goes straight to it.
+ * Confirmed → Packed. Automatically assigns the bag to a planned trip for its
+ * slot (or creates one in barangay route order) and returns the next order
+ * waiting to be packed so the packer goes straight to it.
  */
-export async function markPacked(orderId: string): Promise<ActionResult<{ next: string | null }>> {
+export async function markPacked(orderId: string): Promise<ActionResult<{ next: string | null; tripCode: string | null }>> {
   const me = await requireRole(PACKERS, "/staff/pack");
   return run(async () => {
-    await prisma.$transaction(async tx => {
+    const assigned = await serializable(async tx => {
       // The status guard is in the UPDATE itself: two packers can't both pack it.
       const { count } = await tx.order.updateMany({ where: { id: orderId, status: "CONFIRMED" }, data: { status: "PACKED" } });
       if (count !== 1) {
@@ -59,6 +69,7 @@ export async function markPacked(orderId: string): Promise<ActionResult<{ next: 
         throw new UserError(o.status === "PACKED" ? "Someone already packed this order." : "This order isn't waiting to be packed.");
       }
       await tx.orderStatusEvent.create({ data: { orderId, fromStatus: "CONFIRMED", toStatus: "PACKED", actorId: me.id } });
+      return autoAssignPackedOrdersTx(tx, [orderId]);
     });
     const waiting = await prisma.order.findMany({
       where: { status: "CONFIRMED" },
@@ -72,22 +83,33 @@ export async function markPacked(orderId: string): Promise<ActionResult<{ next: 
         slotRank(a.deliverySlot) - slotRank(b.deliverySlot) ||
         a.createdAt.getTime() - b.createdAt.getTime()
     )[0];
-    return { next: next ? orderCode(next.orderNumber) : null };
+    return { next: next ? orderCode(next.orderNumber) : null, tripCode: assigned.get(orderId) ?? null };
   });
 }
 
-/** Undo a pack (Packed → Confirmed) while the order isn't planned on a trip. */
+/**
+ * Undo a pack (Packed → Confirmed) while the bag hasn't been loaded onto a
+ * truck that left. Detaches from any planned trip and cleans up an empty one.
+ */
 export async function undoPacked(orderId: string): Promise<ActionResult> {
   const me = await requireRole(PACKERS, "/staff/pack");
   return run(() =>
     serializable(async tx => {
-      const o = await tx.order.findUnique({ where: { id: orderId }, select: { status: true, tripId: true } });
+      const o = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { status: true, tripId: true, loadedAt: true, trip: { select: { status: true } } },
+      });
       if (!o || o.status !== "PACKED") throw new UserError("The order changed since; nothing was undone.");
-      if (o.tripId) throw new UserError("It's already planned on a trip. Ask the office to take it off first.");
-      await tx.order.update({ where: { id: orderId }, data: { status: "CONFIRMED" } });
+      if (o.trip && o.trip.status !== "PLANNED") throw new UserError("Its trip has already left.");
+      if (o.loadedAt) throw new UserError("This bag is already loaded on the truck. Untick it on Load first.");
+      await tx.order.update({ where: { id: orderId }, data: { status: "CONFIRMED", tripId: null, stopIndex: null, loadedAt: null } });
       await tx.orderStatusEvent.create({
         data: { orderId, fromStatus: "PACKED", toStatus: "CONFIRMED", actorId: me.id, note: "Undo" },
       });
+      if (o.tripId) {
+        await renumberTripTx(tx, o.tripId);
+        await cleanupEmptyTripTx(tx, o.tripId);
+      }
       return null;
     })
   );
@@ -100,52 +122,6 @@ async function plannedTrip(tx: Prisma.TransactionClient, tripId: string) {
   if (!t) throw new UserError("Trip not found.");
   if (t.status !== "PLANNED") throw new UserError("This trip has already left. Its stops can't change now.");
   return t;
-}
-
-type StopRow = { id: string; stopIndex: number | null };
-
-function stopsOf(tx: Prisma.TransactionClient, tripId: string): Promise<StopRow[]> {
-  return tx.order.findMany({
-    where: { tripId },
-    orderBy: [{ stopIndex: "asc" }, { createdAt: "asc" }],
-    select: { id: true, stopIndex: true },
-  });
-}
-
-/**
- * Write stop numbers for many orders in one statement instead of one round
- * trip per row. With `tripId` it also puts them on that trip and clears their
- * loading tick (drafting a trip).
- */
-async function setStopNumbers(tx: Prisma.TransactionClient, rows: { id: string; stop: number }[], tripId?: string) {
-  if (rows.length === 0) return;
-  const ids = rows.map(r => r.id);
-  const stops = rows.map(r => r.stop);
-  if (tripId) {
-    await tx.$executeRaw`
-      UPDATE "Order" AS o
-      SET "stopIndex" = v.stop, "tripId" = ${tripId}, "loadedAt" = NULL, "updatedAt" = NOW()
-      FROM unnest(${ids}::text[], ${stops}::int[]) AS v(id, stop)
-      WHERE o."id" = v.id`;
-  } else {
-    await tx.$executeRaw`
-      UPDATE "Order" AS o
-      SET "stopIndex" = v.stop, "updatedAt" = NOW()
-      FROM unnest(${ids}::text[], ${stops}::int[]) AS v(id, stop)
-      WHERE o."id" = v.id`;
-  }
-}
-
-/** Only the rows whose number changes when `ids` is numbered 1..n. */
-function changedStops(current: StopRow[], ids: string[]) {
-  const now = new Map(current.map(r => [r.id, r.stopIndex]));
-  return ids.map((id, i) => ({ id, stop: i + 1 })).filter(r => now.get(r.id) !== r.stop);
-}
-
-/** Renumber a trip's stops 1..n in their current order. */
-async function renumber(tx: Prisma.TransactionClient, tripId: string) {
-  const current = await stopsOf(tx, tripId);
-  await setStopNumbers(tx, changedStops(current, current.map(r => r.id)));
 }
 
 export type DraftTripInput = { day: string; slot: string; driverId: string | null; vehicle: string };
@@ -176,7 +152,7 @@ export async function draftTrip(input: DraftTripInput): Promise<ActionResult<{ i
       const ordered = packed
         .sort((a, b) => routeRank(a.deliveryBarangay) - routeRank(b.deliveryBarangay) || a.createdAt.getTime() - b.createdAt.getTime())
         .map(o => o.id);
-      await setStopNumbers(
+      await assignOrdersToTrip(
         tx,
         ordered.map((id, i) => ({ id, stop: i + 1 })),
         trip.id
@@ -258,7 +234,7 @@ export async function setOrderTrip(orderId: string, tripId: string | null): Prom
       } else {
         await tx.order.update({ where: { id: orderId }, data: { tripId: null, stopIndex: null, loadedAt: null } });
       }
-      if (o.tripId) await renumber(tx, o.tripId);
+      if (o.tripId) await renumberTripTx(tx, o.tripId);
       return null;
     }),
     OFFICE_AREAS
@@ -453,56 +429,17 @@ export async function failStop(orderId: string, reason: string): Promise<ActionR
   );
 }
 
-/** Back at the stall: every stop must be delivered or brought back. */
+/** Back at the stall: every stop must be delivered or brought back. Closes the trip immediately. */
 export async function returnTrip(tripId: string): Promise<ActionResult> {
   const me = await requireRole(DRIVERS, "/staff/trip");
   return run(() =>
     serializable(async tx => {
       const t = await driverTrip(tx, tripId, me);
-      if (t.status !== "OUT") throw new UserError(t.status === "PLANNED" ? "This trip hasn't left yet." : "This trip is already back.");
+      if (t.status !== "OUT") throw new UserError(t.status === "PLANNED" ? "This trip hasn't left yet." : "This trip is already closed.");
       const open = await tx.order.count({ where: { tripId, status: "READY" } });
       if (open) throw new UserError(`${open} stop${open === 1 ? " is" : "s are"} still on the truck. Deliver or bring back each one first.`);
       await tx.trip.update({ where: { id: tripId }, data: { status: "RETURNED", returnedAt: new Date() } });
       return null;
     })
-  );
-}
-
-/**
- * The office counts the cash the driver hands in. Expected = the totals of
- * the trip's delivered cash-on-delivery orders. A different amount needs a
- * note. This records a handover between staff; no payment is processed.
- */
-export async function confirmRemit(tripId: string, receivedInput: string, note: string): Promise<ActionResult<{ received: number }>> {
-  const admin = await requireRole(OFFICE, "/admin/dispatch");
-  const received = parsePesoInput(receivedInput);
-  if (received === null) return fail("Enter the cash amount, like 1,250 or 1250.50.");
-  return run(() =>
-    serializable(async tx => {
-      const t = await tx.trip.findUnique({ where: { id: tripId }, select: { status: true } });
-      if (!t) throw new UserError("Trip not found.");
-      if (t.status !== "RETURNED") throw new UserError(t.status === "REMITTED" ? "This trip's cash is already confirmed." : "The truck isn't back yet.");
-      const sum = await tx.order.aggregate({
-        where: { tripId, status: "COMPLETED", paymentMethod: "COD" },
-        _sum: { totalCentavos: true },
-      });
-      const expected = sum._sum.totalCentavos ?? 0;
-      const why = note.trim();
-      if (received !== expected && why.length < 3) {
-        throw new UserError(`Expected ${peso(expected)}. Add a note explaining the difference.`);
-      }
-      await tx.trip.update({
-        where: { id: tripId },
-        data: {
-          status: "REMITTED",
-          cashRemittedCentavos: received,
-          remitNote: why || null,
-          remitConfirmedById: admin.id,
-          remittedAt: new Date(),
-        },
-      });
-      return { received };
-    }),
-    OFFICE_AREAS
   );
 }

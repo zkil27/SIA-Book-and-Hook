@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma";
 import { ageInDays } from "@/lib/ledger";
 import { oldestInflowByVariant, stockByVariant } from "@/lib/stock-sql";
 import { imageForName } from "@/lib/catalog-data";
-import { LOW_STOCK_AT, orderCode, stockState, TO_SALE_AFTER_DAYS, tripCode, type OrderStatusKey } from "@/lib/meta";
+import { LOW_STOCK_AT, orderCode, STALE_GCASH_HOURS, stockState, TO_SALE_AFTER_DAYS, tripCode, type OrderStatusKey } from "@/lib/meta";
 import { DAY_MS, dayKey, daysAgo, startOfShopDay } from "@/lib/time";
 
 // ── Inventory ────────────────────────────────────────────────────────────────
@@ -118,19 +118,18 @@ export type AdminCounts = { pending: number; out: number; low: number; toSale: n
 async function countsWith(load: () => Promise<InvProduct[]>): Promise<AdminCounts> {
   const [inv, [c]] = await Promise.all([
     load(),
-    // Three badge counts in one round trip.
-    prisma.$queryRaw<{ pending: bigint; unplanned: bigint; cash: bigint }[]>`
+    // Two badge counts in one round trip.
+    prisma.$queryRaw<{ pending: bigint; unplanned: bigint }[]>`
       SELECT
         (SELECT COUNT(*) FROM "Order" WHERE "status" = 'PENDING') AS pending,
-        (SELECT COUNT(*) FROM "Order" WHERE "status" = 'PACKED' AND "tripId" IS NULL) AS unplanned,
-        (SELECT COUNT(*) FROM "Trip" WHERE "status" = 'RETURNED') AS cash
+        (SELECT COUNT(*) FROM "Order" WHERE "status" = 'PACKED' AND "tripId" IS NULL) AS unplanned
     `,
   ]);
   const vs = sellable(inv);
   return {
     pending: Number(c.pending),
-    // Dispatch badge: packed orders with no trip, plus trips whose cash is unconfirmed.
-    dispatch: Number(c.unplanned) + Number(c.cash),
+    // Dispatch badge: packed orders with no trip.
+    dispatch: Number(c.unplanned),
     out: vs.filter(v => v.stock <= 0).length,
     low: vs.filter(v => stockState(v.stock) === "low").length,
     toSale: vs.filter(v => v.toSale).length,
@@ -145,19 +144,47 @@ export const getAdminCountsUncached = () => countsWith(loadInventoryUncached);
 export async function getDashboard(load: () => Promise<InvProduct[]> = loadInventory) {
   const today = startOfShopDay();
   const weekStart = daysAgo(6);
-  const open = { status: { not: "CANCELLED" as const } };
-  const [todayAgg, weekOrders, sellerRows, pipeline, pendingOrders, inv, noPin, cashTrips, unplanned] = await Promise.all([
-    prisma.order.aggregate({
-      where: { createdAt: { gte: today }, ...open },
-      _count: { _all: true },
-      _sum: { totalCentavos: true },
-    }),
-    // Orders and sales per shop day, bucketed in SQL (day 0 = weekStart).
-    prisma.$queryRaw<{ idx: number; orders: bigint; revenue: bigint }[]>`
-      SELECT FLOOR(EXTRACT(EPOCH FROM ("createdAt" - ${weekStart}::timestamp)) / 86400)::int AS idx,
-        COUNT(*)::bigint AS orders, COALESCE(SUM("totalCentavos"), 0)::bigint AS revenue
+  const staleCutoff = new Date(Date.now() - STALE_GCASH_HOURS * 3_600_000);
+  const [[summary], weekOrders, sellerRows, pipeline, pendingOrders, inv, noPin, staleGcash, unplanned] = await Promise.all([
+    // Today order count plus uncollected pipeline totals (GCash on hold, COD on delivery).
+    prisma.$queryRaw<{ todayCount: bigint; onHold: bigint; onDelivery: bigint }[]>`
+      SELECT
+        COUNT(*) FILTER (WHERE "createdAt" >= ${today} AND "status" <> 'CANCELLED')::bigint AS "todayCount",
+        COALESCE(SUM("totalCentavos") FILTER (WHERE "paymentMethod" = 'GCASH' AND "status" = 'PENDING'), 0)::bigint AS "onHold",
+        COALESCE(SUM("totalCentavos") FILTER (WHERE "paymentMethod" = 'COD' AND "status" IN ('PENDING', 'CONFIRMED', 'PACKED', 'READY')), 0)::bigint AS "onDelivery"
       FROM "Order"
-      WHERE "createdAt" >= ${weekStart} AND "status" <> 'CANCELLED'
+    `,
+    // Collected sales per shop day, bucketed in SQL (day 0 = weekStart, day 6 = today).
+    // GCash counts on confirm; COD counts on delivery.
+    prisma.$queryRaw<{ idx: number; orders: bigint; revenue: bigint }[]>`
+      WITH collected AS (
+        SELECT
+          o."id",
+          o."totalCentavos",
+          COALESCE(
+            (
+              SELECT MAX(e."createdAt")
+              FROM "OrderStatusEvent" e
+              WHERE e."orderId" = o."id"
+                AND e."toStatus" = (
+                  CASE WHEN o."paymentMethod" = 'GCASH'
+                    THEN 'CONFIRMED'::"OrderStatus"
+                    ELSE 'COMPLETED'::"OrderStatus"
+                  END
+                )
+            ),
+            o."createdAt"
+          ) AS collected_at
+        FROM "Order" o
+        WHERE (o."paymentMethod" = 'GCASH' AND o."status" IN ('CONFIRMED', 'PACKED', 'READY', 'COMPLETED'))
+           OR (o."paymentMethod" = 'COD' AND o."status" = 'COMPLETED')
+      )
+      SELECT
+        FLOOR(EXTRACT(EPOCH FROM (collected_at - ${weekStart}::timestamp)) / 86400)::int AS idx,
+        COUNT(*)::bigint AS orders,
+        COALESCE(SUM("totalCentavos"), 0)::bigint AS revenue
+      FROM collected
+      WHERE collected_at >= ${weekStart}
       GROUP BY idx
     `,
     prisma.$queryRaw<{ name: string; qty: bigint; revenue: bigint }[]>`
@@ -166,7 +193,11 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
       JOIN "Order" o ON o."id" = oi."orderId"
       JOIN "ProductVariant" v ON v."id" = oi."variantId"
       JOIN "Product" p ON p."id" = v."productId"
-      WHERE o."createdAt" >= ${weekStart} AND o."status" <> 'CANCELLED'
+      WHERE o."createdAt" >= ${weekStart}
+        AND (
+          (o."paymentMethod" = 'GCASH' AND o."status" IN ('CONFIRMED', 'PACKED', 'READY', 'COMPLETED'))
+          OR (o."paymentMethod" = 'COD' AND o."status" = 'COMPLETED')
+        )
       GROUP BY p."name"
       ORDER BY revenue DESC
       LIMIT 5
@@ -201,20 +232,11 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
       take: 8,
       select: { id: true, note: true, createdAt: true, actor: { select: { name: true } }, order: { select: { orderNumber: true, deliveryName: true } } },
     }),
-    prisma.trip.findMany({
-      ...JOIN,
-      where: { status: "RETURNED" },
-      orderBy: { returnedAt: "asc" },
-      take: 8,
-      select: {
-        id: true,
-        tripNumber: true,
-        slot: true,
-        vehicle: true,
-        returnedAt: true,
-        driver: { select: { name: true } },
-        orders: { where: { status: "COMPLETED", paymentMethod: "COD" }, select: { totalCentavos: true } },
-      },
+    prisma.order.findMany({
+      where: { status: "PENDING", paymentMethod: "GCASH", createdAt: { lte: staleCutoff } },
+      orderBy: { createdAt: "asc" },
+      take: 50,
+      select: { id: true },
     }),
     prisma.order.count({ where: { status: "PACKED", tripId: null } }),
   ]);
@@ -233,17 +255,22 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
 
   const vs = sellable(inv);
   return {
-    todayCount: todayAgg._count._all,
-    todayRevenue: todayAgg._sum.totalCentavos ?? 0,
+    todayCount: Number(summary?.todayCount ?? 0),
+    todayRevenue: days[6].revenue,
+    onHoldRevenue: Number(summary?.onHold ?? 0),
+    onDeliveryRevenue: Number(summary?.onDelivery ?? 0),
     days,
     topSellers: sellerRows.map(r => ({ name: r.name, qty: Number(r.qty), revenue: Number(r.revenue) })),
     pendingCount,
     pipeline,
     packedNoTrip: unplanned,
+    staleGcashIds: staleGcash.map(o => o.id),
     pendingOrders: pendingOrders.map(o => ({
       id: o.id,
       code: orderCode(o.orderNumber),
       customer: o.deliveryName || o.customer.name || "Customer",
+      payment: o.paymentMethod,
+      stale: o.paymentMethod === "GCASH" && o.createdAt <= staleCutoff,
       total: o.totalCentavos,
       items: o.items.reduce((s, i) => s + i.quantity, 0),
       createdAt: o.createdAt,
@@ -270,14 +297,6 @@ export async function getDashboard(load: () => Promise<InvProduct[]> = loadInven
       note: e.note ?? "",
       by: e.actor?.name ?? "Staff",
       at: e.createdAt,
-    })),
-    cashToConfirm: cashTrips.map(t => ({
-      id: t.id,
-      code: tripCode(t.tripNumber),
-      label: `${t.vehicle} · ${t.slot}`,
-      driver: t.driver?.name ?? "Driver",
-      expected: t.orders.reduce((s, o) => s + o.totalCentavos, 0),
-      returnedAt: t.returnedAt,
     })),
     outOfStock: vs.filter(v => v.stock <= 0),
     lowStock: vs.filter(v => v.stock > 0 && v.stock <= LOW_STOCK_AT).sort((a, b) => a.stock - b.stock),

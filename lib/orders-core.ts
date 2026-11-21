@@ -65,7 +65,7 @@ export async function createOrderTx(
   customerId: string,
   data: PlaceOrderData,
   opts: CreateOrderOpts = {}
-): Promise<{ orderId: string; code: string; total: number; deliveryDate: Date }> {
+): Promise<{ orderId: string; code: string; total: number; deliveryDate: Date; status: OrderStatusKey }> {
   const { items, delivery, payment } = data;
 
   // One truck run per slot: refuse the order once the slot is full. Inside
@@ -110,10 +110,14 @@ export async function createOrderTx(
 
   const subtotal = variants.reduce((s, v) => s + v.priceCentavos * (qtyById.get(v.id) ?? 0), 0);
   const fee = deliveryFeeFor(subtotal);
+  const autoConfirm = payment === "COD";
+  const initialStatus: OrderStatusKey = autoConfirm ? "CONFIRMED" : "PENDING";
+  const placedAt = new Date();
 
   const order = await tx.order.create({
     data: {
       customerId,
+      status: initialStatus,
       paymentMethod: payment,
       deliveryName: delivery.name,
       deliveryPhone: delivery.phone,
@@ -124,6 +128,7 @@ export async function createOrderTx(
       handoffPin: newHandoffPin(),
       deliveryFeeCentavos: fee,
       totalCentavos: subtotal + fee,
+      createdAt: placedAt,
       items: {
         create: variants.map(v => ({
           variantId: v.id,
@@ -131,7 +136,20 @@ export async function createOrderTx(
           priceAtTime: v.priceCentavos,
         })),
       },
-      statusEvents: { create: { toStatus: "PENDING", actorId: customerId, note: opts.note ?? "Placed online" } },
+      statusEvents: {
+        create: autoConfirm
+          ? [
+              { toStatus: "PENDING", actorId: customerId, note: opts.note ?? "Placed online", createdAt: placedAt },
+              {
+                fromStatus: "PENDING",
+                toStatus: "CONFIRMED",
+                actorId: null,
+                note: "Auto-confirmed (Cash on delivery)",
+                createdAt: new Date(placedAt.getTime() + 1),
+              },
+            ]
+          : { toStatus: "PENDING", actorId: customerId, note: opts.note ?? "Placed online", createdAt: placedAt },
+      },
     },
   });
 
@@ -145,7 +163,7 @@ export async function createOrderTx(
     })),
   });
 
-  return { orderId: order.id, code, total: subtotal + fee, deliveryDate };
+  return { orderId: order.id, code, total: subtotal + fee, deliveryDate, status: initialStatus };
 }
 
 /**

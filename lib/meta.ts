@@ -113,9 +113,24 @@ export type TripStatusKey = "PLANNED" | "OUT" | "RETURNED" | "REMITTED";
 export const TRIP_STATUS_META: Record<TripStatusKey, { label: string; tone: "yellow" | "violet" | "teal" | "green" }> = {
   PLANNED: { label: "Being loaded", tone: "yellow" },
   OUT: { label: "On the road", tone: "violet" },
-  RETURNED: { label: "Back, count the cash", tone: "teal" },
+  RETURNED: { label: "Closed", tone: "green" },
   REMITTED: { label: "Closed", tone: "green" },
 };
+
+/** Hours before an unconfirmed GCash order is flagged as stale (holding stock). */
+export const STALE_GCASH_HOURS = 2;
+
+/** Payment state shown in admin tables/drawers: GCash settles on confirm, COD on delivery. */
+export function paymentStatusOf(
+  payment: "GCASH" | "COD",
+  status: OrderStatusKey
+): { label: string; tone: "yellow" | "green" | "teal" | "gray" } {
+  if (status === "CANCELLED") return { label: payment === "GCASH" ? "GCash" : "COD", tone: "gray" };
+  if (payment === "GCASH") {
+    return status === "PENDING" ? { label: "GCash · On hold", tone: "yellow" } : { label: "GCash · Paid", tone: "green" };
+  }
+  return status === "COMPLETED" ? { label: "COD · Collected", tone: "green" } : { label: "COD · On delivery", tone: "teal" };
+}
 
 export function tripCode(tripNumber: number): string {
   return `T-${String(tripNumber).padStart(3, "0")}`;

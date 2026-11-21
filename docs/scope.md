@@ -59,7 +59,7 @@ delivery radius. Has a Facebook page used for orders and price announcements.
 | Customer auth | Register and log in with credentials; session persists. |
 | Customer order history | Logged-in customer can view their own past orders and statuses. |
 | Shopping cart | Client-side cart: add/remove items, adjust quantity, running subtotal, and a delivery-fee rule (free over ₱500). Cart state lives in the browser. |
-| Checkout flow | Multi-step checkout — order review, delivery information, payment method selection, confirmation. Produces an order record with status `PENDING`. |
+| Checkout flow | Multi-step checkout — order review, delivery information, payment method selection, confirmation. GCash orders start `PENDING` (on hold); COD orders auto-confirm to `CONFIRMED` for packing. |
 | Payment method selection | Customer picks GCash or Cash on Delivery. UI only — displays GCash details / QR placeholder and a proof-of-payment upload placeholder. No real capture, no integration. |
 | Order tracking | Customer enters an Order ID (plus the last 4 digits of the delivery phone when not signed in as the order's owner) and sees its status against a fixed set of stages (Pending → Confirmed → Packed → On the truck → Delivered), with their stop number while on the truck. |
 
@@ -74,8 +74,8 @@ delivery radius. Has a Facebook page used for orders and price announcements.
 | Category management | Admin can create and rename categories. |
 | Stock adjustment | Admin can adjust variant stock with a reason; writes a `StockMovement` row. Remaining stock lots are evaluated FIFO-style, and stock at least 7 days old is flagged **To Sale** for admin review only. |
 | Stock history | Read-only ledger view per variant showing every movement, newest first. |
-| Order list & status update | Table of orders with status and total. Admin confirms and packs; trips move orders onto the truck and drivers deliver them; the office can override "delivered" with a written reason, or cancel. |
-| Dashboard summary | Today's order count, total revenue, and low-stock alerts on the /admin landing page. |
+| Order list & status update | Table of orders with status, payment state (`GCash · On hold`, `COD · On delivery`, etc.), and total. Admin confirms GCash orders, bulk-prints labels, and cancels stale/open orders; packing auto-assigns trips in route order; drivers close stops and trips on return; the office can override "delivered" or adjust trips in Dispatch. |
+| Dashboard summary | Today's order count, collected sales (`GCash` on confirm, `COD` on delivery) with `on hold` / `on delivery` sub-totals, and low-stock / stale GCash alerts on the /admin landing page. |
 
 ### Documentation deliverables
 
@@ -182,3 +182,4 @@ analytics beyond a basic dashboard summary.
 | 2026-11-07 | Bag labels: confirming an order (one or in bulk) prints a 4×6 in (100×150 mm) bag label in the browser; packers and the office can reprint it. HTML + print CSS + `window.print()`, the same pattern as the printable receipt. Shows code, first name, barangay, delivery day/slot, COD amount or "Paid · GCash", and an item checklist; never the phone, address, stop number or handoff PIN. Stays out of scope: a PDF library, printer drivers or direct thermal-printer integration, barcodes/QR. | Pending team agreement |
 | 2026-11-07 | Dev account switcher: an allowlisted developer (ADMIN + `DEV_EMAILS`) can switch to any account in one click to test each role, and switch back. Developer-only and off when `DEV_EMAILS` is unset; no staff or customer capability added. See `docs/dev-tools.md`. | Pending team agreement |
 | 2026-11-08 | Private order tracking: `/track` and `/receipt` need the signed-in owner, staff, or the order code plus the last 4 phone digits (which gives a shareable tracking link). Closes enumeration of every order's items and totals by sequential code. No capability added. See `docs/security.md`. | Pending team agreement |
+| 2026-11-21 | Operational automation & reporting refinements: collected-sales reporting (`GCash` on confirm, `COD` on delivery) with `on hold`/`on delivery` pipeline sub-totals; compact non-truncating 4×6 bag waybill; removal of admin cash-received remit confirmation (trips close on driver return while drivers keep per-stop COD confirmation); auto-confirmed COD checkout + packer batch label printing; auto-planned/assigned trips on pack in route order; bulk cancel/print and 2h stale GCash release. Still no real payment settlement, courier GPS, or notifications. | Pending team agreement |

@@ -1,13 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, Banknote, KeyRound, PackagePlus, ScrollText } from "lucide-react";
+import { ArrowRight, KeyRound, PackagePlus, ScrollText } from "lucide-react";
 import { getDashboard } from "@/lib/admin-data";
 import { splitName, STATUS_META, type OrderStatusKey } from "@/lib/meta";
 import { peso } from "@/lib/money";
-import { ago, fmtLongDate, fmtTime, shopIsOpen } from "@/lib/time";
+import { ago, fmtLongDate, shopIsOpen } from "@/lib/time";
 import { AgeBadge, PageHeader, Panel, StockCount, Thumb } from "@/components/admin/kit";
-import { ConfirmButton, SalesBars, TopSellers } from "@/components/admin/TodayParts";
-import { ButtonLink } from "@/components/ui/primitives";
+import { ConfirmButton, ReleaseStaleButton, SalesBars, TopSellers } from "@/components/admin/TodayParts";
+import { ButtonLink, Chip } from "@/components/ui/primitives";
 import { Stamp } from "@/components/ui/motion";
 
 export const metadata = { title: "Today" };
@@ -19,8 +19,27 @@ export default async function TodayPage() {
     d.pendingCount === 0 &&
     alerts === 0 &&
     d.toSale.length === 0 &&
-    d.cashToConfirm.length === 0 &&
     d.noPinDeliveries.length === 0;
+
+  const stats: { k: string; v: string; href: string; hot?: boolean; sub?: ReactNode }[] = [
+    { k: "Orders today", v: String(d.todayCount), href: "/admin/orders" },
+    {
+      k: "Sales today",
+      v: peso(d.todayRevenue),
+      href: "/admin/orders",
+      sub:
+        d.onHoldRevenue > 0 || d.onDeliveryRevenue > 0 ? (
+          <span className="mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 text-[12px] font-medium text-ink-3">
+            {d.onHoldRevenue > 0 && <span className="tabular text-[#6b4e00]">{peso(d.onHoldRevenue)} on hold</span>}
+            {d.onDeliveryRevenue > 0 && <span className="tabular text-teal-deep">{peso(d.onDeliveryRevenue)} on delivery</span>}
+          </span>
+        ) : (
+          <span className="mt-1 block text-[12px] font-medium text-ink-3">Collected</span>
+        ),
+    },
+    { k: "Waiting to confirm", v: String(d.pendingCount), href: "/admin/orders?status=PENDING", hot: d.pendingCount > 0 },
+    { k: "Stock alerts", v: String(alerts), href: "/admin/stock", hot: alerts > 0 },
+  ];
 
   return (
     <>
@@ -49,12 +68,7 @@ export default async function TodayPage() {
 
       {/* Stat strip */}
       <dl className="grid grid-cols-2 overflow-hidden rounded-[var(--radius-card)] bg-paper ring-1 ring-inset ring-ice-3 md:grid-cols-4">
-        {[
-          { k: "Orders today", v: String(d.todayCount), href: "/admin/orders" },
-          { k: "Sales today", v: peso(d.todayRevenue), href: "/admin/orders" },
-          { k: "Waiting to confirm", v: String(d.pendingCount), href: "/admin/orders?status=PENDING", hot: d.pendingCount > 0 },
-          { k: "Stock alerts", v: String(alerts), href: "/admin/stock", hot: alerts > 0 },
-        ].map((s, i) => (
+        {stats.map((s, i) => (
           <Link
             key={s.k}
             href={s.href}
@@ -62,6 +76,7 @@ export default async function TodayPage() {
           >
             <dt className="text-[13px] font-semibold text-ink-3">{s.k}</dt>
             <dd className={`tabular mt-1 text-[26px] font-bold ${s.hot ? "text-marker-deep" : "text-ink"}`}>{s.v}</dd>
+            {s.sub}
           </Link>
         ))}
       </dl>
@@ -82,45 +97,29 @@ export default async function TodayPage() {
             <div className="divide-y divide-ice-3">
               {d.pendingOrders.length > 0 && (
                 <InboxGroup label={`${d.pendingCount} order${d.pendingCount === 1 ? "" : "s"} to confirm`} href="/admin/orders?status=PENDING">
+                  {d.staleGcashIds.length > 0 && (
+                    <li className="flex flex-wrap items-center justify-between gap-2 bg-marker-soft/60 px-5 py-2.5">
+                      <span className="text-[13px] font-semibold text-marker-deep">
+                        {d.staleGcashIds.length} GCash order{d.staleGcashIds.length === 1 ? " has" : "s have"} been on hold 2+ hours, holding stock
+                      </span>
+                      <ReleaseStaleButton ids={d.staleGcashIds} />
+                    </li>
+                  )}
                   {d.pendingOrders.map(o => (
                     <li key={o.id} className="flex items-center gap-3 px-5 py-3">
                       <Link href={`/admin/orders?open=${o.code}`} className="min-w-0 flex-1">
-                        <p className="flex items-center gap-2">
+                        <p className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-[13px] font-bold text-ink">{o.code}</span>
                           <span className="truncate font-semibold text-ink">{o.customer}</span>
+                          <Chip tone={o.stale ? "red" : "yellow"}>
+                            {o.stale ? "Stale · holding stock" : o.payment === "GCASH" ? "GCash · On hold" : "COD"}
+                          </Chip>
                         </p>
                         <p className="text-[13px] text-ink-3">
                           {o.items} item{o.items === 1 ? "" : "s"} · {peso(o.total)} · {o.slot || "no slot"} · {ago(o.createdAt)}
                         </p>
                       </Link>
                       <ConfirmButton orderId={o.id} code={o.code} label={o.label} />
-                    </li>
-                  ))}
-                </InboxGroup>
-              )}
-              {d.cashToConfirm.length > 0 && (
-                <InboxGroup
-                  label={`${d.cashToConfirm.length} trip${d.cashToConfirm.length === 1 ? "" : "s"} back, cash to confirm`}
-                  href="/admin/dispatch"
-                >
-                  {d.cashToConfirm.map(t => (
-                    <li key={t.id} className="flex items-center gap-3 px-5 py-3">
-                      <Banknote className="size-5 shrink-0 text-ink-3" aria-hidden />
-                      <div className="min-w-0 flex-1">
-                        <p className="flex items-center gap-2">
-                          <span className="font-mono text-[13px] font-bold text-ink">{t.code}</span>
-                          <span className="truncate font-semibold text-ink">{t.driver}</span>
-                        </p>
-                        <p className="text-[13px] text-ink-3">
-                          {t.label} · back {t.returnedAt ? fmtTime(t.returnedAt) : ""} · expect {peso(t.expected)} cash
-                        </p>
-                      </div>
-                      <Link
-                        href="/admin/dispatch"
-                        className="inline-flex h-8 items-center rounded-lg px-2.5 text-[13px] font-semibold text-teal-deep ring-1 ring-inset ring-ice-3 hover:bg-mint-soft"
-                      >
-                        Count cash
-                      </Link>
                     </li>
                   ))}
                 </InboxGroup>
@@ -236,13 +235,13 @@ function StockRow({
  */
 function OrderFlow({ pipeline, packedNoTrip }: { pipeline: Record<OrderStatusKey | "ALL", number>; packedNoTrip: number }) {
   const steps: { key: OrderStatusKey; who: string; href: string; hint: string }[] = [
-    { key: "PENDING", who: "Office", href: "/admin/orders?status=PENDING", hint: "Confirm & print the label" },
+    { key: "PENDING", who: "Office", href: "/admin/orders?status=PENDING", hint: "Verify GCash & confirm" },
     { key: "CONFIRMED", who: "Packer", href: "/staff/pack", hint: "Pack the bag" },
     {
       key: "PACKED",
-      who: "Office",
+      who: packedNoTrip > 0 ? "Office" : "Staff",
       href: "/admin/dispatch",
-      hint: packedNoTrip > 0 ? `${packedNoTrip} need${packedNoTrip === 1 ? "s" : ""} a trip` : "Put on a trip",
+      hint: packedNoTrip > 0 ? `${packedNoTrip} need${packedNoTrip === 1 ? "s" : ""} a trip` : "Auto-tripped · load truck",
     },
     { key: "READY", who: "Driver", href: "/admin/orders?status=READY", hint: "Deliver with the PIN" },
   ];

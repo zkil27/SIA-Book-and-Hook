@@ -32,11 +32,11 @@ export default async function TripsPage() {
                   progress={
                     t.status === "PLANNED"
                       ? `Load first: ${loaded} of ${t.stops.length} bags on`
-                      : t.status === "REMITTED" && t.remit
-                        ? `Done · cash confirmed ${peso(t.remit.received)}`
-                        : t.status === "RETURNED"
-                          ? `Back · hand ${peso(t.cashCollected)} to the office`
-                          : `${delivered} of ${t.stops.length} delivered`
+                      : t.status === "RETURNED" || t.status === "REMITTED"
+                        ? t.cashCollected > 0
+                          ? `Closed · ${peso(t.cashCollected)} COD collected`
+                          : "Closed"
+                        : `${delivered} of ${t.stops.length} delivered`
                   }
                 />
               </li>

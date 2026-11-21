@@ -57,60 +57,72 @@ export function labelFromPack(o: {
   return { ...o, lines: o.lines.map(l => ({ ...l })) };
 }
 
-const MAX_LINES = 9;
-
 /**
- * One 100×150 mm thermal label, black on white. Sizes are in print units so
- * it measures the same on every printer; the order code is the bag's ID and
- * reads from arm's length.
+ * Compact 100×150 mm (4×6 in) thermal label, black on white. Uses adaptive
+ * typography and a 2-column switch above 26 lines so every line item fits on
+ * the label without truncating to "+ N more".
  */
 export function BagLabel({ label }: { label: LabelData }) {
   const units = label.lines.reduce((s, l) => s + l.qty, 0);
-  const shown = label.lines.slice(0, MAX_LINES);
-  const more = label.lines.length - shown.length;
+  const n = label.lines.length;
+  const twoCol = n >= 27;
+  const listClass = twoCol
+    ? "mt-[2mm] grid grid-cols-2 gap-x-[2.5mm] gap-y-[0.5mm] text-[7pt] leading-[1.12]"
+    : n >= 16
+      ? "mt-[2mm] flex flex-col gap-[0.55mm] text-[8pt] leading-[1.15]"
+      : "mt-[2mm] flex flex-col gap-[0.85mm] text-[9.5pt] leading-[1.2]";
+  const boxClass = twoCol
+    ? "size-[2mm] shrink-0 rounded-[0.4mm] border-[0.35mm] border-black"
+    : n >= 16
+      ? "size-[2.4mm] shrink-0 rounded-[0.45mm] border-[0.4mm] border-black"
+      : "size-[3mm] shrink-0 rounded-[0.5mm] border-[0.45mm] border-black";
+  const qtyWidth = twoCol ? "w-[6mm]" : n >= 16 ? "w-[7mm]" : "w-[8mm]";
+
   return (
-    <div className="bag-label flex flex-col bg-white p-[5mm] font-sans text-black">
-      <div className="flex items-baseline justify-between border-b-[0.6mm] border-black pb-[1.5mm] text-[9pt] font-bold uppercase tracking-wide">
+    <div className="bag-label flex flex-col bg-white p-[3.5mm] font-sans text-black">
+      <div className="flex items-baseline justify-between border-b-[0.5mm] border-black pb-[1mm] text-[7.5pt] font-bold uppercase tracking-wide">
         <span>Hook &amp; Box</span>
         <span>Fresh seafood · Dasmariñas</span>
       </div>
 
-      <p className="mt-[2.5mm] text-[38pt] font-black leading-none tracking-tight">{label.code}</p>
+      <div className="mt-[1.5mm] flex items-center justify-between gap-[2mm]">
+        <p className="text-[26pt] font-black leading-none tracking-tight">{label.code}</p>
+        <div className="shrink-0 rounded-[1.2mm] border-[0.5mm] border-black px-[2mm] py-[1mm] text-right leading-tight">
+          <p className="text-[9pt] font-extrabold">{label.day ? fmtDay(label.day) : "No date"}</p>
+          <p className="text-[9pt] font-bold">{shortSlot(label.slot)}</p>
+        </div>
+      </div>
 
-      <p className="mt-[2mm] text-[24pt] font-extrabold leading-tight">{label.firstName}</p>
-      <p className="text-[15pt] font-semibold leading-tight">{label.barangay}</p>
-
-      <div className="mt-[3mm] flex items-center justify-between rounded-[1.5mm] border-[0.6mm] border-black px-[3mm] py-[1.8mm] text-[14pt] font-extrabold leading-none">
-        <span>{label.day ? fmtDay(label.day) : "No date"}</span>
-        <span>{shortSlot(label.slot)}</span>
+      <div className="mt-[1.5mm] flex items-baseline justify-between gap-[2mm]">
+        <p className="min-w-0 truncate text-[14pt] font-extrabold leading-tight">{label.firstName}</p>
+        <p className="shrink-0 text-[11pt] font-semibold leading-tight">{label.barangay}</p>
       </div>
 
       {label.payment === "COD" ? (
-        <p className="mt-[2.5mm] rounded-[1.5mm] bg-black px-[3mm] py-[2.2mm] text-center text-[17pt] font-black uppercase leading-none text-white">
+        <p className="mt-[1.5mm] rounded-[1.2mm] bg-black px-[2.5mm] py-[1.4mm] text-center text-[12.5pt] font-black uppercase leading-none text-white">
           Collect {peso(label.total)} cash
         </p>
       ) : (
-        <p className="mt-[2.5mm] rounded-[1.5mm] border-[0.6mm] border-dashed border-black px-[3mm] py-[2mm] text-center text-[15pt] font-extrabold uppercase leading-none">
+        <p className="mt-[1.5mm] rounded-[1.2mm] border-[0.5mm] border-dashed border-black px-[2.5mm] py-[1.2mm] text-center text-[11.5pt] font-extrabold uppercase leading-none">
           Paid · GCash
         </p>
       )}
 
-      <ul className="mt-[3mm] flex flex-col gap-[1.2mm] text-[11pt] leading-tight">
-        {shown.map((l, i) => (
-          <li key={i} className="flex items-center gap-[2mm]">
-            <span className="size-[3.6mm] shrink-0 rounded-[0.6mm] border-[0.45mm] border-black" aria-hidden />
-            <span className="tabular w-[9mm] shrink-0 font-black">{l.qty} ×</span>
+      <ul className={listClass}>
+        {label.lines.map((l, i) => (
+          <li key={i} className="flex min-w-0 items-center gap-[1.3mm]">
+            <span className={boxClass} aria-hidden />
+            <span className={`tabular ${qtyWidth} shrink-0 font-black`}>{l.qty} ×</span>
             <span className="min-w-0 truncate">
               <span className="font-bold">{l.name}</span> · {l.variant}
             </span>
           </li>
         ))}
-        {more > 0 && <li className="pl-[5.6mm] text-[10pt] font-semibold">+ {more} more on the pick list</li>}
       </ul>
 
-      <div className="mt-auto flex items-baseline justify-between border-t-[0.4mm] border-black pt-[1.5mm] text-[9pt]">
+      <div className="mt-auto flex items-baseline justify-between border-t-[0.4mm] border-black pt-[1mm] text-[7.5pt]">
         <span className="font-bold">
-          {units} item{units === 1 ? "" : "s"}
+          {units} item{units === 1 ? "" : "s"} ({n} {n === 1 ? "line" : "lines"})
         </span>
         <span>Placed {fmtDateTime(label.placedAt)}</span>
       </div>

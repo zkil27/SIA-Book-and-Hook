@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Check, Printer } from "lucide-react";
-import { advanceOrder, revertOrder } from "@/lib/actions/admin-orders";
+import { advanceOrder, cancelOrders, revertOrder } from "@/lib/actions/admin-orders";
 import { labelFromAdmin } from "@/components/staff/BagLabel";
 import { usePrintLabels, usePrintOnConfirm } from "@/components/staff/PrintLabels";
 import { peso } from "@/lib/money";
@@ -51,6 +51,45 @@ export function ConfirmButton({ orderId, code, label }: { orderId: string; code:
   );
 }
 
+/** One-click release for stale unconfirmed GCash orders holding stock (with inline confirm). */
+export function ReleaseStaleButton({ ids }: { ids: string[] }) {
+  const toast = useToast();
+  const [armed, setArmed] = useState(false);
+  const [pending, start] = useTransition();
+  if (!armed) {
+    return (
+      <Button size="sm" variant="danger" onClick={() => setArmed(true)}>
+        Release stale ({ids.length})
+      </Button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      <Button
+        size="sm"
+        variant="marker"
+        loading={pending}
+        onClick={() =>
+          start(async () => {
+            const res = await cancelOrders(ids, "GCash payment not received");
+            if (!res.ok) return toast({ title: "Couldn't release orders", description: res.error, tone: "error" });
+            setArmed(false);
+            toast({
+              title: `${res.data.count} stale order${res.data.count === 1 ? "" : "s"} cancelled`,
+              description: "Held stock returned to the shelf.",
+            });
+          })
+        }
+      >
+        Cancel &amp; restock {ids.length}
+      </Button>
+      <Button size="sm" variant="ghost" disabled={pending} onClick={() => setArmed(false)}>
+        Keep
+      </Button>
+    </div>
+  );
+}
+
 /** Hand-built daily sales bars (single series, one hue, hover tooltip). */
 export function SalesBars({ days }: { days: { start: string; revenue: number; orders: number }[] }) {
   const reduce = useReducedMotion();
@@ -60,7 +99,7 @@ export function SalesBars({ days }: { days: { start: string; revenue: number; or
   return (
     <div>
       <p className="tabular text-2xl font-bold text-ink">{peso(total)}</p>
-      <p className="text-[13px] text-ink-3">Sales from orders over the last 7 days (cancelled excluded)</p>
+      <p className="text-[13px] text-ink-3">Collected sales over the last 7 days (confirmed GCash &amp; delivered COD)</p>
       <div className="relative mt-5">
         <div className="flex h-40 items-end gap-2 border-b border-ice-3">
           {days.map((d, i) => {

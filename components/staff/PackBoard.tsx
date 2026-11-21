@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, ChevronRight, PackageCheck } from "lucide-react";
+import { ChevronDown, ChevronRight, PackageCheck, Printer } from "lucide-react";
 import type { PackedBag, PackOrder, PullRow } from "@/lib/trips-data";
 import { shortSlot } from "@/lib/meta";
 import { fmtDayRelative } from "@/lib/time";
+import { Button } from "@/components/ui/primitives";
 import { Stamp } from "@/components/ui/motion";
+import { labelFromPack } from "./BagLabel";
+import { usePrintLabels } from "./PrintLabels";
 import { StaffEmpty } from "./StaffShell";
 
 const dayLabel = (day: string | null) => (day ? fmtDayRelative(day) : "No date");
@@ -16,6 +19,7 @@ const dayLabel = (day: string | null) => (day ? fmtDayRelative(day) : "No date")
  * checklist; nothing here needs an order code to be typed or remembered.
  */
 export function PackBoard({ queue, pull, packed }: { queue: PackOrder[]; pull: PullRow[]; packed: PackedBag[] }) {
+  const { print, sheet } = usePrintLabels();
   const groups: { key: string; label: string; orders: PackOrder[] }[] = [];
   for (const o of queue) {
     const key = `${o.day}|${o.slot}`;
@@ -33,7 +37,14 @@ export function PackBoard({ queue, pull, packed }: { queue: PackOrder[]; pull: P
 
   return (
     <div>
-      <h1 className="sign text-[40px] leading-none text-ink">Pack</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="sign text-[40px] leading-none text-ink">Pack</h1>
+        {queue.length > 0 && (
+          <Button size="sm" variant="outline" onClick={() => print(queue.map(labelFromPack))}>
+            <Printer className="size-4" aria-hidden /> Print all ({queue.length})
+          </Button>
+        )}
+      </div>
       <p className="mt-2 text-[15px] text-ink-2">
         {queue.length === 0
           ? "No orders to pack right now."
@@ -73,13 +84,18 @@ export function PackBoard({ queue, pull, packed }: { queue: PackOrder[]; pull: P
             </Stamp>
           }
         >
-          New orders show up here as soon as the office confirms them (their labels print then, too).
+          COD orders arrive automatically right after checkout; GCash orders arrive as soon as the office confirms them.
         </StaffEmpty>
       ) : (
         <div className="mt-6 flex flex-col gap-6">
           {groups.map(g => (
             <section key={g.key} aria-label={g.label}>
-              <h2 className="mb-2 text-[14px] font-bold text-ink-2">{g.label}</h2>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="text-[14px] font-bold text-ink-2">{g.label}</h2>
+                <Button size="sm" variant="outline" onClick={() => print(g.orders.map(labelFromPack))}>
+                  <Printer className="size-3.5" aria-hidden /> Print labels ({g.orders.length})
+                </Button>
+              </div>
               <ul className="flex flex-col gap-2">
                 {g.orders.map(o => (
                   <li key={o.id}>
@@ -136,6 +152,7 @@ export function PackBoard({ queue, pull, packed }: { queue: PackOrder[]; pull: P
           </p>
         </details>
       )}
+      {sheet}
     </div>
   );
 }

@@ -174,10 +174,10 @@ async function main() {
   // Each order goes out the morning after it's placed (lib/time.ts
   // deliveryDateFor). Last week's orders rode trips that are closed and their
   // cash counted. Yesterday's orders make today's three truck runs:
-  //   A (6–8 AM)   back at the stall, cash waiting for the office
+  //   A (6–8 AM)   closed (back at the stall, COD collected)
   //   B (8–10 AM)  on the road: one stop done, three on the truck
   //   C (10–12 NN) being loaded, plus one packed order with no trip yet
-  // Today's orders (for tomorrow) wait to be confirmed or packed.
+  // Today's orders (for tomorrow): COD is auto-confirmed for packing; GCash waits to confirm.
   const SLOTS = ["6:00–8:00 AM", "8:00–10:00 AM", "10:00 AM–12:00 NN"];
   const SLOT_START = [6, 8, 10];
   const sellableSkus = variants.filter(v => v.opening > 0 && !SLOW_MOVERS.has(v.sku)).map(v => v.sku);
@@ -227,11 +227,11 @@ async function main() {
     { day: 1, hour: 19.0, status: S.PACKED, slot: 2, trip: "C", cod: true, who: 0 },
     { day: 1, hour: 20.1, status: S.PACKED, slot: 2, who: 4 },
     // Today → tomorrow morning.
-    { day: 0, hour: 6.3, status: S.CONFIRMED, slot: 0, lines: [["SQUID-PUSIT-1", 1], ["FISH-TILAPIA-W1", 2]] },
-    { day: 0, hour: 6.9, status: S.CONFIRMED, slot: 1, lines: [["FISH-BANGUS-W1", 1], ["SHELL-TAHONG-500", 2]] },
-    { day: 0, hour: 7.4, status: S.PENDING, lines: [["CRAB-ALIMANGO-1", 1], ["SHELL-HIPON-500", 1]] },
-    { day: 0, hour: 8.2, status: S.PENDING, lines: [["FISH-BANGUS-W1", 2], ["SHELL-HALAAN-1", 1]] },
-    { day: 0, hour: 8.9, status: S.PENDING, lines: [["SHELL-SUGPO-500", 1], ["SQUID-BISAYA-500", 1]] },
+    { day: 0, hour: 6.3, status: S.CONFIRMED, slot: 0, cod: true, lines: [["SQUID-PUSIT-1", 1], ["FISH-TILAPIA-W1", 2]] },
+    { day: 0, hour: 6.9, status: S.CONFIRMED, slot: 1, cod: false, lines: [["FISH-BANGUS-W1", 1], ["SHELL-TAHONG-500", 2]] },
+    { day: 0, hour: 7.4, status: S.PENDING, cod: false, lines: [["CRAB-ALIMANGO-1", 1], ["SHELL-HIPON-500", 1]] },
+    { day: 0, hour: 8.2, status: S.PENDING, cod: false, lines: [["FISH-BANGUS-W1", 2], ["SHELL-HALAAN-1", 1]] },
+    { day: 0, hour: 8.9, status: S.PENDING, cod: false, lines: [["SHELL-SUGPO-500", 1], ["SQUID-BISAYA-500", 1]] },
   ];
 
   type Placed = {
@@ -314,8 +314,9 @@ async function main() {
           orderId: order.id,
           fromStatus: S.PENDING,
           toStatus: S.CONFIRMED,
-          actorId: pick(staff).id,
-          createdAt: past(new Date(placed.getTime() + (0.3 + rand()) * HOUR), 30),
+          actorId: cod ? null : pick(staff).id,
+          note: cod ? "Auto-confirmed (Cash on delivery)" : undefined,
+          createdAt: cod ? new Date(placed.getTime() + 1) : past(new Date(placed.getTime() + (0.3 + rand()) * HOUR), 30),
         },
       });
     }
@@ -341,7 +342,7 @@ async function main() {
   }
 
   // Trips: last week's deliveries grouped by day and slot, then today's A/B/C.
-  type TripPlan = { key: string; day: Date; slot: number; stops: Placed[]; status: "PLANNED" | "OUT" | "RETURNED" | "REMITTED" };
+  type TripPlan = { key: string; day: Date; slot: number; stops: Placed[]; status: "PLANNED" | "OUT" | "RETURNED" };
   const tripPlans = new Map<string, TripPlan>();
   for (const o of placedOrders) {
     if (o.plan.trip) {
@@ -351,7 +352,7 @@ async function main() {
       tripPlans.get(key)!.stops.push(o);
     } else if (o.plan.status === S.COMPLETED) {
       const key = `${o.day.toISOString()}|${o.slot}`;
-      if (!tripPlans.has(key)) tripPlans.set(key, { key, day: o.day, slot: o.slot, stops: [], status: "REMITTED" });
+      if (!tripPlans.has(key)) tripPlans.set(key, { key, day: o.day, slot: o.slot, stops: [], status: "RETURNED" });
       tripPlans.get(key)!.stops.push(o);
     }
   }
@@ -364,8 +365,7 @@ async function main() {
     const stops = tp.stops.sort((a, b) => routeRank(a.barangay) - routeRank(b.barangay) || a.placed.getTime() - b.placed.getTime());
     const doneAt = (i: number) => new Date(leave.getTime() + (i + 1) * 0.35 * HOUR);
     const left = tp.status !== "PLANNED";
-    const back = tp.status === "RETURNED" || tp.status === "REMITTED" ? past(doneAt(stops.length), 15) : null;
-    const cash = stops.filter(s => s.cod && s.plan.status === S.COMPLETED).reduce((sum, s) => sum + s.total, 0);
+    const back = tp.status === "RETURNED" ? past(doneAt(stops.length), 15) : null;
     const trip = await prisma.trip.create({
       data: {
         date: tp.day,
@@ -375,9 +375,6 @@ async function main() {
         status: tp.status,
         departedAt: left ? past(leave, 40) : null,
         returnedAt: back,
-        ...(tp.status === "REMITTED" && back
-          ? { cashRemittedCentavos: cash, remitConfirmedById: admin.id, remittedAt: past(new Date(back.getTime() + 0.25 * HOUR), 10) }
-          : {}),
       },
     });
     tripCount++;

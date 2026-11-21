@@ -172,7 +172,19 @@ task is wasted cost and is not allowed here.
 Adding a new project-wide "never do this" rule? Encode it as a rule in
 `scripts/check-footguns.ts` so it's enforced, not just documented.
 
-## Known issues / current gaps (updated 2026-11-08)
+## Known issues / current gaps (updated 2026-11-21)
+
+0. **Sales recognition, compact waybill & admin automations (2026-11-21):**
+   `Sales today`, 7-day bars, and top sellers count collected revenue only
+   (GCash on confirmation, COD on delivery), while displaying `on hold` (pending
+   GCash) and `on delivery` (active COD) sub-totals. `BagLabel` renders every
+   line item without truncation (`+ N more` removed) using adaptive sizing /
+   2-column grid for 27+ lines. Trips close immediately on driver return
+   (`RETURNED`, no admin remit/cash-count confirmation step). COD orders
+   auto-confirm at checkout (`CONFIRMED`), packers have batch label printing,
+   packing auto-assigns bags to a slot's `PLANNED` trip in `BARANGAY_ROUTE`
+   order (`lib/trips-core.ts`), and `/admin/orders` adds bulk print, bulk cancel
+   (`cancelOrders`), and 2h stale GCash release (`STALE_GCASH_HOURS`).
 
 0. **Speed pass 2 + staff UI (2026-11-07):** Prisma `relationJoins` preview is
    on; hot nested reads pass `relationLoadStrategy: "join"`. Batch multi-row

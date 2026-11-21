@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState, useTransition, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Banknote, Check, PackageCheck, Plus, Trash2, Truck, X } from "lucide-react";
 import {
-  confirmRemit,
   draftTrip,
   moveStop,
   scrapTrip,
@@ -13,9 +12,9 @@ import {
 } from "@/lib/actions/trips";
 import type { DispatchDay, DispatchOrder, DispatchSlot, TripView } from "@/lib/trips-data";
 import { SLOT_CAPACITY, TRIP_STATUS_META, VEHICLES } from "@/lib/meta";
-import { peso, pesoNumber } from "@/lib/money";
+import { peso } from "@/lib/money";
 import { fmtDayRelative, fmtLongDay, fmtTime } from "@/lib/time";
-import { Button, Chip, Input, Select, Textarea } from "@/components/ui/primitives";
+import { Button, Chip, Input, Select } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/toast";
 
 type Driver = { id: string; name: string };
@@ -311,60 +310,13 @@ function TripBlock({ trip: t, drivers, siblings }: { trip: TripView; drivers: Dr
         </ol>
       )}
 
-      {t.status === "RETURNED" && <RemitForm trip={t} />}
-      {t.status === "REMITTED" && t.remit && (
+      {(t.status === "RETURNED" || t.status === "REMITTED") && t.cashCollected > 0 && (
         <p className="border-t border-ice-2 px-3 py-2.5 text-[13px] text-ink-2">
           <Banknote className="mr-1 inline size-4 align-[-3px] text-leaf" aria-hidden />
-          Cash confirmed <strong className="tabular text-ink">{peso(t.remit.received)}</strong> by {t.remit.by} at {fmtTime(t.remit.at)}
-          {t.remit.received !== t.cashCollected && <> (expected {peso(t.cashCollected)})</>}
-          {t.remit.note && <> · {t.remit.note}</>}
+          COD collected <strong className="tabular text-ink">{peso(t.cashCollected)}</strong>
         </p>
       )}
     </div>
-  );
-}
-
-function RemitForm({ trip: t }: { trip: TripView }) {
-  const { act, pending } = useAct();
-  const [amount, setAmount] = useState(pesoNumber(t.cashCollected).replace(/,/g, ""));
-  const [note, setNote] = useState("");
-  const typedDiffers = amount.replace(/[₱,\s]/g, "") !== pesoNumber(t.cashCollected).replace(/,/g, "");
-  return (
-    <form
-      className="flex flex-col gap-2 border-t border-ice-2 bg-tarp-soft/50 px-3 py-3"
-      onSubmit={e => {
-        e.preventDefault();
-        act(() => confirmRemit(t.id, amount, note), `${t.code} cash confirmed`);
-      }}
-    >
-      <p className="text-[13px] text-ink">
-        <strong>Count the cash from {t.driver?.name ?? "the driver"}.</strong> Expected{" "}
-        <strong className="tabular">{peso(t.cashCollected)}</strong> from cash-on-delivery stops.
-      </p>
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-3">₱</span>
-          <Input aria-label="Cash received" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} className="tabular h-10 pl-7 text-sm" />
-        </div>
-        <Button type="submit" size="md" loading={pending} disabled={typedDiffers && note.trim().length < 3}>
-          Confirm cash
-        </Button>
-      </div>
-      {typedDiffers && (
-        <Field label="Why is it different?">
-          <Textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="e.g. Customer paid ₱20 short; driver covered it" />
-        </Field>
-      )}
-    </form>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1 text-[12px] font-semibold text-ink-2">
-      {label}
-      {children}
-    </label>
   );
 }
 

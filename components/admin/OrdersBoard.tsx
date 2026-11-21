@@ -5,11 +5,11 @@ import { memo, useCallback, useDeferredValue, useEffect, useEffectEvent, useMemo
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowRight, Ban, ChevronRight, MapPin, Phone, Printer, Search, Truck, X } from "lucide-react";
 import type { AdminOrder, OrderDetail } from "@/lib/admin-data";
-import { advanceOrder, advanceOrders, cancelOrder, markDeliveredByOffice, orderDetail, revertOrder } from "@/lib/actions/admin-orders";
-import { OFFICE_ADVANCE, PAYMENT_LABEL, splitName, STATUS_META, type OrderStatusKey } from "@/lib/meta";
+import { advanceOrder, advanceOrders, cancelOrder, cancelOrders, markDeliveredByOffice, orderDetail, revertOrder } from "@/lib/actions/admin-orders";
+import { OFFICE_ADVANCE, PAYMENT_LABEL, paymentStatusOf, splitName, STALE_GCASH_HOURS, STATUS_META, type OrderStatusKey } from "@/lib/meta";
 import { peso } from "@/lib/money";
 import { ago, fmtDateTime, fmtDay } from "@/lib/time";
-import { Button, Kbd, StatusChip, Textarea } from "@/components/ui/primitives";
+import { Button, Chip, Kbd, StatusChip, Textarea } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/motion";
 import { useToast } from "@/components/ui/toast";
 import { labelFromAdmin } from "@/components/staff/BagLabel";
@@ -26,12 +26,18 @@ const OTHER: (OrderStatusKey | "ALL")[] = ["CANCELLED", "ALL"];
 const tabLabel = (k: OrderStatusKey | "ALL") => (k === "ALL" ? "All" : STATUS_META[k].label);
 
 const CANCEL_REASONS = [
+  "GCash payment not received",
   "Customer cancelled",
   "Couldn't reach customer",
   "Out of stock",
   "Outside delivery area",
   "Bad weather (no delivery)",
 ];
+
+const STALE_MS = STALE_GCASH_HOURS * 3_600_000;
+function isStaleGcash(o: AdminOrder, now: number) {
+  return o.payment === "GCASH" && o.status === "PENDING" && now - Date.parse(o.createdAt) >= STALE_MS;
+}
 
 const OFFICE_DELIVERED_REASONS = [
   "Customer confirmed by phone",
@@ -68,7 +74,11 @@ function useAdvance(print: (o: AdminOrder) => void) {
       after?.();
       toast({
         title: `${o.code} ${STATUS_META[res.data.to].done.toLowerCase()}`,
-        description: printed ? "Label sent to the printer. It now waits in To pack." : `Next: ${STATUS_META[res.data.to].label.toLowerCase()}.`,
+        description: printed
+          ? "Label sent to the printer. It now waits in To pack."
+          : res.data.tripCode
+            ? `Added to ${res.data.tripCode} for loading.`
+            : `Next: ${STATUS_META[res.data.to].label.toLowerCase()}.`,
         undo: async () => {
           const r = await revertOrder(o.id, res.data.to, o.status);
           if (!r.ok) toast({ title: "Couldn't undo", description: r.error, tone: "error" });
@@ -98,6 +108,10 @@ export function OrdersBoard({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [focus, setFocus] = useState(-1);
   const [bulkPending, startBulk] = useTransition();
+  const [bulkCancelOpen, setBulkCancelOpen] = useState(false);
+  const [bulkCancelReason, setBulkCancelReason] = useState("");
+  const [bulkCancelling, startBulkCancel] = useTransition();
+  const [now] = useState(() => Date.now());
   const { print, sheet } = usePrintLabels();
   const printOne = useCallback((o: AdminOrder) => print([labelFromAdmin(o)]), [print]);
   const { run, pending } = useAdvance(printOne);
@@ -110,6 +124,7 @@ export function OrdersBoard({
       `${o.code} ${o.customer} ${o.delivery.name} ${o.delivery.barangay} ${o.items.map(i => i.name).join(" ")}`.toLowerCase().includes(s)
     );
   }, [orders, query]);
+  const staleIds = useMemo(() => shown.filter(o => isStaleGcash(o, now)).map(o => o.id), [shown, now]);
 
   // The open order lives in client state and the URL is updated without a
   // server round trip; a new ?open= from outside (palette, inbox) still wins.
@@ -185,6 +200,8 @@ export function OrdersBoard({
   const selectedOrders = orders.filter(o => selected.has(o.id));
   const bulkStatus = selectedOrders.length && selectedOrders.every(o => o.status === selectedOrders[0].status) ? selectedOrders[0].status : null;
   const bulkLabel = bulkStatus && canAdvance(bulkStatus) ? nextButtonLabel(bulkStatus, printOn) : null;
+  const printableSelected = selectedOrders.filter(o => canPrint(o.status));
+  const cancellableSelected = selectedOrders.filter(o => o.status !== "CANCELLED" && o.status !== "COMPLETED");
 
   function bulkAdvance() {
     if (!bulkStatus) return;
@@ -222,6 +239,11 @@ export function OrdersBoard({
           <input type="checkbox" checked={printOn} onChange={e => setPrintOn(e.target.checked)} className="size-4 rounded accent-[var(--color-ink)]" />
           <Printer className="size-4 text-ink-3" aria-hidden /> Print a bag label when confirming
         </label>
+        {status === "PENDING" && staleIds.length > 0 && (
+          <Button size="sm" variant="danger" onClick={() => setSelected(new Set(staleIds))}>
+            Select stale ({staleIds.length})
+          </Button>
+        )}
         <p className="ml-auto hidden items-center gap-1.5 text-[12px] text-ink-3 lg:flex">
           Keyboard: <Kbd>j</Kbd>
           <Kbd>k</Kbd> move · <Kbd>a</Kbd> next step · <Kbd>?</Kbd> all shortcuts
@@ -243,6 +265,7 @@ export function OrdersBoard({
               index={i}
               focused={i === focus}
               selected={selected.has(o.id)}
+              stale={isStaleGcash(o, now)}
               pending={pending}
               printOn={printOn}
               onToggle={toggle}
@@ -261,24 +284,90 @@ export function OrdersBoard({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", stiffness: 420, damping: 34 }}
-            className="fixed inset-x-3 bottom-20 z-40 mx-auto flex max-w-xl items-center gap-3 rounded-2xl bg-ink p-2 pl-4 text-white shadow-[var(--shadow-sheet)] lg:bottom-6 lg:left-60"
+            className="fixed inset-x-3 bottom-20 z-40 mx-auto flex max-w-2xl flex-wrap items-center gap-2 rounded-2xl bg-ink p-2 pl-4 text-white shadow-[var(--shadow-sheet)] lg:bottom-6 lg:left-60"
           >
             <span className="text-sm font-semibold">{selected.size} selected</span>
-            {bulkLabel ? (
-              <Button size="sm" variant="tarp" loading={bulkPending} onClick={bulkAdvance} className="ml-auto">
-                {bulkStatus === "PENDING" && printOn ? `Confirm ${selected.size} & print labels` : `${bulkLabel} ${selected.size}`}
-              </Button>
-            ) : (
-              <span className="ml-auto text-[13px] text-white/75">
-                {bulkStatus === "PACKED" ? "Packed bags go out on a trip: plan it in Dispatch." : bulkStatus ? "These move with their trip, not from here." : "Pick orders in the same step"}
-              </span>
-            )}
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {printableSelected.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                  onClick={() => print(printableSelected.map(labelFromAdmin))}
+                >
+                  <Printer className="size-3.5" aria-hidden /> Print labels ({printableSelected.length})
+                </Button>
+              )}
+              {cancellableSelected.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="marker"
+                  onClick={() => {
+                    setBulkCancelReason("");
+                    setBulkCancelOpen(true);
+                  }}
+                >
+                  <Ban className="size-3.5" aria-hidden /> Cancel ({cancellableSelected.length})
+                </Button>
+              )}
+              {bulkLabel ? (
+                <Button size="sm" variant="tarp" loading={bulkPending} onClick={bulkAdvance}>
+                  {bulkStatus === "PENDING" && printOn ? `Confirm ${selected.size} & print` : `${bulkLabel} ${selected.size}`}
+                </Button>
+              ) : (
+                <span className="hidden text-[12px] text-white/75 sm:inline">
+                  {bulkStatus === "PACKED" ? "Auto-tripped on pack" : bulkStatus ? "Moves with trip" : "Mixed statuses"}
+                </span>
+              )}
+            </div>
             <button onClick={() => setSelected(new Set())} className="grid size-10 place-items-center rounded-lg text-white/70 hover:bg-white/10" aria-label="Clear selection">
               <X className="size-4" />
             </button>
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Sheet
+        open={bulkCancelOpen}
+        onClose={() => setBulkCancelOpen(false)}
+        title={`Cancel ${cancellableSelected.length} order${cancellableSelected.length === 1 ? "" : "s"}?`}
+        description="Stock from these orders goes back on the shelf as compensating ledger entries."
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setBulkCancelOpen(false)} disabled={bulkCancelling}>
+              Keep orders
+            </Button>
+            <Button
+              variant="marker"
+              loading={bulkCancelling}
+              disabled={bulkCancelReason.trim().length < 3 || cancellableSelected.length === 0}
+              onClick={() =>
+                startBulkCancel(async () => {
+                  const res = await cancelOrders(
+                    cancellableSelected.map(o => o.id),
+                    bulkCancelReason
+                  );
+                  if (!res.ok) return toast({ title: "Couldn't cancel orders", description: res.error, tone: "error" });
+                  toast({
+                    title: `${res.data.count} order${res.data.count === 1 ? "" : "s"} cancelled`,
+                    description: "Stock returned to the shelf.",
+                  });
+                  setBulkCancelOpen(false);
+                  setSelected(new Set());
+                })
+              }
+            >
+              Cancel {cancellableSelected.length} order{cancellableSelected.length === 1 ? "" : "s"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-semibold text-ink">Why cancel?</p>
+          <ReasonChips reasons={CANCEL_REASONS} value={bulkCancelReason} onChange={setBulkCancelReason} />
+          <Textarea value={bulkCancelReason} onChange={e => setBulkCancelReason(e.target.value)} placeholder="Or type a reason" rows={2} />
+        </div>
+      </Sheet>
 
       <OrderDrawer order={open} onClose={() => setOpen(null)} onPrint={printOne} />
       {sheet}
@@ -412,6 +501,7 @@ const OrderRow = memo(function OrderRow({
   index,
   focused,
   selected,
+  stale,
   pending,
   printOn,
   onToggle,
@@ -422,12 +512,14 @@ const OrderRow = memo(function OrderRow({
   index: number;
   focused: boolean;
   selected: boolean;
+  stale: boolean;
   pending: boolean;
   printOn: boolean;
   onToggle: (id: string) => void;
   onOpen: (code: string) => void;
   onAdvance: (o: AdminOrder) => void;
 }) {
+  const pay = paymentStatusOf(o.payment, o.status);
   return (
     <li
       data-row={index}
@@ -444,7 +536,11 @@ const OrderRow = memo(function OrderRow({
         </span>
         <span className="text-[13px] text-ink-2">
           {o.delivery.day ? `${fmtDay(o.delivery.day)} · ` : ""}
-          {o.delivery.slot || "—"} · {o.payment === "GCASH" ? "GCash" : "COD"}
+          {o.delivery.slot || "—"} ·{" "}
+          <span className={pay.tone === "yellow" ? "font-semibold text-[#6b4e00]" : pay.tone === "green" ? "font-semibold text-[#14532f]" : pay.tone === "teal" ? "font-semibold text-teal-ink" : ""}>
+            {pay.label}
+          </span>
+          {stale && <Chip tone="red" className="ml-1.5">Stale</Chip>}
           <span className="block text-ink-3">
             {o.delivery.barangay} · {ago(o.createdAt)}
           </span>
@@ -486,6 +582,7 @@ function OrderDrawer({ order, onClose, onPrint }: { order: AdminOrder | null; on
   const toast = useToast();
   const { run, pending } = useAdvance(onPrint);
   const [printOn] = usePrintOnConfirm();
+  const [now] = useState(() => Date.now());
   const [cancelOpen, setCancelOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -493,6 +590,8 @@ function OrderDrawer({ order, onClose, onPrint }: { order: AdminOrder | null; on
   const [delivering, startDeliver] = useTransition();
   const loaded = useOrderDetail(order?.id ?? null);
   const detail = loaded?.detail ?? null;
+  const pay = order ? paymentStatusOf(order.payment, order.status) : null;
+  const stale = order ? isStaleGcash(order, now) : false;
 
   // A different order resets the forms (reset during render).
   const [forId, setForId] = useState(order?.id);
@@ -579,7 +678,7 @@ function OrderDrawer({ order, onClose, onPrint }: { order: AdminOrder | null; on
                 )}
                 {canPrint(order.status) && order.status !== "PENDING" && (
                   <Button variant="ghost" onClick={() => onPrint(order)}>
-                    <Printer className="size-4" aria-hidden /> Reprint label
+                    <Printer className="size-4" aria-hidden /> Print label
                   </Button>
                 )}
                 {canAdvance(order.status) && (
@@ -611,9 +710,11 @@ function OrderDrawer({ order, onClose, onPrint }: { order: AdminOrder | null; on
         <div className="flex flex-col gap-6">
           <div className="flex flex-wrap items-center gap-2">
             <StatusChip status={order.status} />
+            {pay && <Chip tone={pay.tone}>{pay.label}</Chip>}
+            {stale && <Chip tone="red">Stale · holding stock</Chip>}
             {order.status === "PENDING" && (
               <p className="text-[13px] text-ink-2">
-                Check the day, slot and payment below. {printOn ? "Confirming prints the bag label for the packer." : "Confirming sends it to packing."}
+                Verify GCash payment before confirming. {printOn ? "Confirming prints the bag label for the packer." : "Confirming sends it to packing."}
               </p>
             )}
           </div>

@@ -75,22 +75,26 @@ An order also stores:
   finish with a logged reason instead.
 
 Statuses run `PENDING → CONFIRMED → PACKED → READY (on the truck) → COMPLETED`,
-or `CANCELLED` from any status before `READY`. The office advances only the
-first two steps; `PACKED → READY` happens when the driver starts the trip, and
-`READY → COMPLETED` at the door (PIN or logged reason) or by an office override
-with a written reason.
+or `CANCELLED` from any status before `READY`. COD orders auto-confirm at
+checkout (`PENDING` followed immediately by `CONFIRMED` with note
+`"Auto-confirmed (Cash on delivery)"`), so only GCash orders wait in `PENDING`
+for office payment verification. Moving `CONFIRMED → PACKED` automatically
+assigns the bag to a `PLANNED` trip for its `(deliveryDate, deliverySlot)` in
+`BARANGAY_ROUTE` order (creating a trip when none has room). `PACKED → READY`
+happens when the driver starts the trip, and `READY → COMPLETED` at the door
+(PIN or logged reason) or by an office override with a written reason.
 
 ### Trip
 One delivery run on the store's own vehicle: a delivery day, a slot, a vehicle
 label ("Truck 1", a label only, no fleet records), a driver, and its orders as
 numbered stops. `tripNumber` is shown as **T-012**. Status runs
-`PLANNED` (drafted, being loaded) → `OUT` (left the stall) → `RETURNED` (back,
-cash not yet counted) → `REMITTED` (the office confirmed the cash). The remit
-fields record the cash-on-delivery money the driver handed in
-(`cashRemittedCentavos`), who counted it and a note when it differs from the
-expected total. That is a handover record between staff, not payment
-processing. A planned trip that never left may be scrapped (deleted); a trip
-that left stays as part of the delivery record.
+`PLANNED` (drafted automatically on pack or manually by the office, being loaded)
+→ `OUT` (left the stall) → `RETURNED` (back at the stall, closed). Legacy
+`REMITTED` rows and `cashRemittedCentavos` / `remitNote` / `remitConfirmedById` /
+`remittedAt` columns remain in the schema for backward compatibility and also
+display as `Closed`; there is no separate admin cash-count confirmation step. A
+planned trip that never left may be scrapped (deleted); a trip that left stays as
+part of the delivery record.
 
 ### OrderItem
 One line on an order: which variant, how many, and the price **at the time of

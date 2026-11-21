@@ -11,7 +11,7 @@ export default async function DispatchPage() {
     <>
       <PageHeader
         title="Dispatch"
-        sub="Plan each morning slot's truck run, then count the cash when it comes back. Drivers finish every stop with the customer's PIN."
+        sub="Packed orders are automatically grouped into a morning trip per slot in route order. Adjust drivers, vehicles or stops here when needed."
         actions={
           <>
             <ButtonLink href="/staff/load" variant="outline">

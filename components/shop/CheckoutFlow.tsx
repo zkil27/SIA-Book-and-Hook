@@ -10,7 +10,7 @@ import { BasinIcon, FreeDeliveryMeter, QtyStepper } from "./BasketUI";
 import { DeliveryFields, validateContact } from "./DeliveryFields";
 import { ReceiptSlip } from "./ReceiptSlip";
 import { placeOrder } from "@/lib/actions/checkout";
-import { DELIVERY_SLOTS, type DeliveryContact } from "@/lib/meta";
+import { DELIVERY_SLOTS, type DeliveryContact, type OrderStatusKey } from "@/lib/meta";
 import { deliveryFeeFor, peso } from "@/lib/money";
 import type { SlotAvailability } from "@/lib/orders";
 import { fmtDay, fmtLongDay } from "@/lib/time";
@@ -20,7 +20,7 @@ import { useToast } from "@/components/ui/toast";
 const STEPS = ["Review", "Delivery", "Payment", "Receipt"] as const;
 
 type Delivery = DeliveryContact & { name: string; slot: (typeof DELIVERY_SLOTS)[number] };
-type Receipt = { code: string; total: number; items: BasketItem[]; payment: "GCASH" | "COD"; slot: string; day: string; fee: number };
+type Receipt = { code: string; total: number; items: BasketItem[]; payment: "GCASH" | "COD"; slot: string; day: string; fee: number; status: OrderStatusKey };
 
 function validate(d: Delivery, availability: SlotAvailability | null): Partial<Record<keyof Delivery, string>> {
   const e: Partial<Record<keyof Delivery, string>> = validateContact(d);
@@ -110,6 +110,7 @@ export function CheckoutFlow({
         slot: delivery.slot,
         day: res.data.deliveryDay,
         fee,
+        status: res.data.status,
       });
       basket.clear();
       go(3);
@@ -361,7 +362,11 @@ export function CheckoutFlow({
                   </AnimatePresence>
 
                   <p className="mt-5 text-[13px] text-ink-3">
-                    Your order is saved as <strong>Pending</strong>. We confirm it before packing; payment is settled outside this site.
+                    {payment === "GCASH"
+                      ? "GCash orders stay on hold as Pending until we verify your transfer. Payment is settled outside this site."
+                      : payment === "COD"
+                        ? "Cash on delivery orders are confirmed right away and sent straight to packing. Pay the driver at your door."
+                        : "GCash orders wait for payment verification; Cash on delivery orders go straight to packing."}
                   </p>
                   <div className="mt-6 flex items-center justify-between gap-3">
                     <Button variant="ghost" onClick={() => go(1)}>
@@ -448,12 +453,13 @@ function OrderPlaced({ receipt }: { receipt: Receipt }) {
         payment={receipt.payment}
         slot={receipt.slot}
         day={receipt.day}
-        status="PENDING"
+        status={receipt.status}
         animated
       />
       <p className="mt-6 max-w-sm text-center text-sm text-ink-2">
-        We&apos;ll confirm your order before packing. Once it&apos;s packed, your account shows a 4-digit PIN: tell it to
-        the driver at the door.
+        {receipt.payment === "COD"
+          ? "Your order is confirmed and sent to packing. Once it's packed, your account shows a 4-digit PIN: tell it to the driver at the door."
+          : "We'll verify your GCash transfer and confirm your order before packing. Once it's packed, your account shows a 4-digit PIN: tell it to the driver at the door."}
       </p>
       <div className="mt-5 flex flex-wrap justify-center gap-3">
         <ButtonLink href={`/track?code=${receipt.code}`}>Track this order</ButtonLink>
